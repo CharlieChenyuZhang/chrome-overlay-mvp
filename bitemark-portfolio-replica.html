@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portfolio - Bitemark Style</title>
+    <link href="https://fonts.googleapis.com/css?family=Inter:300,regular,500,600%7CSource+Sans+Pro:200,300,regular%7CSource+Sans+Pro:regular,600,700%7CCourier+Prime:regular%7CMolle:italic&subset=latin,vietnamese,latin,latin-ext" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: "Galderglynn Esquire W 00 Book", sans-serif;
+            background-color: #14120d;
+            color: #feffd9;
+            font-size: 12px;
+            line-height: 15.6px;
+            font-weight: 400;
+            margin: 0;
+            -webkit-font-smoothing: antialiased;
+            overflow-x: hidden;
+        }
+
+        /* Hero Section - Fixed Background */
+        .section.hero {
+            background-color: #feffd9;
+            color: #121111;
+            width: 100vw;
+            height: 100vh;
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 1;
+        }
+
+        .n-container.hero {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Portfolio Section - Scrollable over fixed background */
+        .portfolio-section {
+            position: relative;
+            z-index: 2;
+            margin-top: 100vh;
+        }
+
+        .image-overlay-wrap.portfolio {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 60px;
+            padding: 60px 0;
+            position: relative;
+            max-width: 1200px;
+            margin: 0 auto;
+            z-index: 3;
+            transition: all;
+        }
+
+        .project-wrapped {
+            display: flex;
+            flex-direction: column;
+            width: 420px;
+            height: auto;
+            text-decoration: none;
+            color: inherit;
+            transition: all;
+            box-shadow: #14120d 0px 2px 5px 0px;
+            position: relative;
+        }
+
+        /* Alternating rotations - exact matrix values from Bitemark */
+        .project-wrapped:nth-child(odd) {
+            transform: matrix(0.99863, 0.052336, -0.052336, 0.99863, 0, 0);
+        }
+
+        .project-wrapped:nth-child(even) {
+            transform: matrix(0.99863, -0.052336, 0.052336, 0.99863, 0, 0);
+        }
+
+        .project-cover-wrapper {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 420px;
+            height: 236px;
+            padding: 0;
+            overflow: hidden;
+            transition: all;
+        }
+
+        /* Different background colors for each project type */
+        .project-cover-wrapper.gh { background-color: #f5f2ed; }
+        .project-cover-wrapper.kori { background-color: #2a2a2a; }
+        .project-cover-wrapper.kiarra { background-color: #d4b896; }
+        .project-cover-wrapper.hommage { background-color: #1a1a1a; }
+        .project-cover-wrapper.agents { background-color: #e8e5e0; }
+        .project-cover-wrapper.scale { background-color: #2d2d2d; }
+        .project-cover-wrapper.aura { background-color: #f0f0f0; }
+
+        .stretched {
+            display: block;
+            width: 100%;
+            height: 100%;
+            transition: all;
+        }
+
+        .stretched img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+            transition: all 0.3s ease;
+            filter: grayscale(0%);
+        }
+
+        .project-description-wrapper {
+            background-color: #feffd9;
+            color: #feffd9;
+            padding: 20px 24px;
+            width: 420px;
+            min-height: 140px;
+            border-radius: 0 0 8px 8px;
+        }
+
+        .project-description-wrapper h4 {
+            color: #121111;
+            font-size: 10.8px;
+            line-height: 12.96px;
+            text-align: center;
+            font-weight: 400;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .project-description-wrapper h2 {
+            color: #121111;
+            font-size: 10.8px;
+            line-height: 12.204px;
+            text-align: center;
+            font-weight: 400;
+            margin-bottom: 12px;
+            max-width: 372px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .service-tags {
+            text-align: center;
+            font-size: 10.8px;
+            color: #121111;
+            line-height: 12.96px;
+        }
+
+        /* Hover Effects */
+
+        .project-wrapped:hover .stretched img {
+            filter: grayscale(100%);
+        }
+
+
+
+
+        /* Responsive adjustments */
+        @media (max-width: 1200px) {
+            .image-overlay-wrap.portfolio {
+                padding: 40px 20px;
+            }
+
+            .project-wrapped {
+                width: 90%;
+                max-width: 420px;
+            }
+
+            .project-cover-wrapper, .project-description-wrapper {
+                width: 100%;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .image-overlay-wrap.portfolio {
+                gap: 40px;
+                padding: 30px 15px;
+            }
+
+            .project-cover-wrapper {
+                height: 200px;
+                padding: 0;
+            }
+
+            .stretched {
+                width: 100%;
+                height: auto;
+                max-height: 200px;
+            }
+
+            .stretched img {
+                width: 100%;
+                height: auto;
+                max-height: 200px;
+            }
+        }
+
+        /* Hero content styling to match */
+        .hero-content {
+            text-align: center;
+            color: #121111;
+        }
+
+        .hero-content h1 {
+            font-size: 48px;
+            font-weight: 400;
+            margin-bottom: 20px;
+            letter-spacing: 2px;
+        }
+
+        .hero-content p {
+            font-size: 14px;
+            line-height: 20px;
+            max-width: 500px;
+        }
+    </style>
+</head>
+<body class="portfolio">
+    <div class="section hero homepage black portfolio">
+        <div class="n-container hero portfolio">
+            <div class="hero-content">
+                <h1>Portfolio</h1>
+                <p>Artistry + strategy intertwined<br>
+                Your story, told visually<br>
+                Making 'buy' an easy decision for your people</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="portfolio-section">
+        <div class="image-overlay-wrap portfolio">
+        <a href="#" class="project-wrapped w-inline-block">
+            <div class="project-cover-wrapper gh">
+                <div class="stretched">
+                    <img src="pics/Slide1.png" alt="Creative Project 1" loading="lazy">
+                </div>
+            </div>
+            <div class="project-description-wrapper more-padding">
+                <h4 class="center-aligned black">Gesture Home • Chair Company</h4>
+                <h2 class="smaller black">Repositioning chairs as heirloom pieces with influence on everyday comfort.</h2>
+                <div class="service-tags">Branding</div>
+            </div>
+        </a>
+
+        <a href="#" class="project-wrapped r w-inline-block">
+            <div class="project-cover-wrapper kori">
+                <div class="stretched">
+                    <img src="pics/Slide2.png" alt="Creative Project 2" loading="lazy">
+                </div>
+            </div>
+            <div class="project-description-wrapper more-padding">
+                <h4 class="center-aligned black">Kori Whitby • Copywriter</h4>
+                <h2 class="smaller black">Blending the powers of creative thinking and technology to revolutionise a copywriter's brand presence.</h2>
+                <div class="service-tags">Branding via Design Intensive<br>Web design<br>Web build</div>
+            </div>
+        </a>
+
+        <a href="#" class="project-wrapped w-inline-block">
+            <div class="project-cover-wrapper kiarra">
+                <div class="stretched">
+                    <img src="pics/Slide3.png" alt="Creative Project 3" loading="lazy">
+                </div>
+            </div>
+            <div class="project-description-wrapper more-padding">
+                <h4 class="center-aligned black">Kiarra Soleil • Social Media Manager</h4>
+                <h2 class="smaller black">Drawing on the iconic 60s to revive a social media manager's brand in a feel-good way.</h2>
+                <div class="service-tags">Branding via Design Intensive</div>
+            </div>
+        </a>
+
+        <a href="#" class="project-wrapped r w-inline-block">
+            <div class="project-cover-wrapper hommage">
+                <div class="stretched">
+                    <img src="pics/Slide4.png" alt="Creative Project 4" loading="lazy">
+                </div>
+            </div>
+            <div class="project-description-wrapper more-padding">
+                <h4 class="center-aligned black">Hommage • Book Shop</h4>
+                <h2 class="smaller black">Bringing the appeal of physical books into the modern world.</h2>
+                <div class="service-tags">Branding</div>
+            </div>
+        </a>
+
+        <a href="#" class="project-wrapped w-inline-block">
+            <div class="project-cover-wrapper agents">
+                <div class="stretched">
+                    <img src="pics/Slide5.png" alt="Creative Project 5" loading="lazy">
+                </div>
+            </div>
+            <div class="project-description-wrapper more-padding">
+                <h4 class="center-aligned black">Agents by Brooke • Agent Referral Agency</h4>
+                <h2 class="smaller black">Revolutionising a sketchy industry with a trustworthy brand.</h2>
+                <div class="service-tags">Branding<br>Web design<br>Web build</div>
+            </div>
+        </a>
+
+        <a href="#" class="project-wrapped r w-inline-block">
+            <div class="project-cover-wrapper scale">
+                <div class="stretched">
+                    <img src="pics/Slide6.png" alt="Creative Project 6" loading="lazy">
+                </div>
+            </div>
+            <div class="project-description-wrapper more-padding">
+                <h4 class="center-aligned black">Scale Your Socials • Social Media Agency</h4>
+                <h2 class="smaller black">Fusing the styles of the past and future for a visionary agency.</h2>
+                <div class="service-tags">Branding via Design Intensive</div>
+            </div>
+        </a>
+
+        <a href="#" class="project-wrapped w-inline-block">
+            <div class="project-cover-wrapper aura">
+                <div class="stretched">
+                    <img src="pics/Slide7.png" alt="Creative Project 7" loading="lazy">
+                </div>
+            </div>
+            <div class="project-description-wrapper more-padding">
+                <h4 class="center-aligned black">Aura • Perfume</h4>
+                <h2 class="smaller black">Redefining the standard for (unisex) perfume.</h2>
+                <div class="service-tags">Branding</div>
+            </div>
+        </a>
+
+        <div class="project-wrapped r">
+            <div class="project-cover-wrapper" style="background-color: #f5f2ed; border: 2px dashed #ccc; display: flex; align-items: center; justify-content: center;">
+                <div style="text-align: center; color: #666; font-size: 14px;">
+                    <h4 style="color: #333; margin-bottom: 10px;">[SPACE RESERVED FOR YOUR PROJECT]</h4>
+                    <p>Your next creative project could be featured here</p>
+                </div>
+            </div>
+            <div class="project-description-wrapper more-padding">
+                <h4 class="center-aligned black">[Space Reserved for Your Project]</h4>
+                <h2 class="smaller black">Ready to create something amazing together?</h2>
+                <div class="service-tags">Let's chat</div>
+            </div>
+        </div>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,6 +1,7 @@
 import type { PlasmoCSConfig } from "plasmo"
 import React, { useEffect } from "react"
-import { render, unmountComponentAtNode } from "react-dom"
+import { createRoot, type Root } from "react-dom/client"
+import { animate } from "motion"
 
 export const config: PlasmoCSConfig = {
   matches: ["<all_urls>"],
@@ -158,15 +159,17 @@ const styles = `
   scroll-behavior: smooth;
   overscroll-behavior: contain;
   background: rgba(20, 18, 13, 0.22);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(var(--blur, 8px));
+  -webkit-backdrop-filter: blur(var(--blur, 8px));
   -webkit-font-smoothing: antialiased;
   color: #feffd9;
   font-size: 12px;
   line-height: 15.6px;
   font-weight: 400;
   font-family: system-ui, -apple-system, Segoe UI, Roboto, Inter, Arial, sans-serif;
+  will-change: clip-path, backdrop-filter, background-color;
 }
+@keyframes card-fade-in { from { opacity: 0; } to { opacity: 1; } }
 .overlay *, .overlay *::before, .overlay *::after { box-sizing: border-box; margin: 0; padding: 0; }
 .section.hero.fixed {
   background-color: transparent; color: #121111; width: 100vw; height: 100vh;
@@ -175,7 +178,15 @@ const styles = `
 .n-container.hero { width: 100%; height: 100%; position: relative; display: flex; align-items: center; justify-content: center; }
 .portfolio-section { position: relative; z-index: 2; margin-top: 40vh; }
 .image-overlay-wrap.portfolio { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 60px; padding: 60px 0; position: relative; max-width: 1200px; margin: 0 auto; z-index: 3; transition: all; }
-.project-wrapped { display: flex; flex-direction: column; width: 420px; height: auto; text-decoration: none; color: inherit; transition: all; box-shadow: #14120d 0px 2px 5px 0px; position: relative; scroll-snap-align: center; scroll-snap-stop: always; }
+.project-wrapped { display: flex; flex-direction: column; width: 420px; height: auto; text-decoration: none; color: inherit; transition: all; box-shadow: #14120d 0px 2px 5px 0px; position: relative; scroll-snap-align: center; scroll-snap-stop: always; opacity: 0; animation: card-fade-in 0.6s ease forwards; }
+.image-overlay-wrap.portfolio > .project-wrapped:nth-child(1) { animation-delay: 0.05s; }
+.image-overlay-wrap.portfolio > .project-wrapped:nth-child(2) { animation-delay: 0.1s; }
+.image-overlay-wrap.portfolio > .project-wrapped:nth-child(3) { animation-delay: 0.15s; }
+.image-overlay-wrap.portfolio > .project-wrapped:nth-child(4) { animation-delay: 0.2s; }
+.image-overlay-wrap.portfolio > .project-wrapped:nth-child(5) { animation-delay: 0.25s; }
+.image-overlay-wrap.portfolio > .project-wrapped:nth-child(6) { animation-delay: 0.3s; }
+.image-overlay-wrap.portfolio > .project-wrapped:nth-child(7) { animation-delay: 0.35s; }
+.image-overlay-wrap.portfolio > .project-wrapped:nth-child(8) { animation-delay: 0.4s; }
 .image-overlay-wrap.portfolio > .project-wrapped:nth-child(odd) { transform: matrix(0.99863, 0.052336, -0.052336, 0.99863, 0, 0); }
 .image-overlay-wrap.portfolio > .project-wrapped:nth-child(even) { transform: matrix(0.99863, -0.052336, 0.052336, 0.99863, 0, 0); }
 .project-cover-wrapper { display: flex; align-items: center; justify-content: center; width: 420px; height: 236px; padding: 0; overflow: hidden; transition: all; }
@@ -201,7 +212,65 @@ const styles = `
 `
 
 export function Overlay({ onClose }: { onClose: () => void }) {
+  const listRef = React.useRef<HTMLDivElement | null>(null)
+  const overlayRef = React.useRef<HTMLElement | null>(null)
+
   useEffect(() => {
+    // Overlay reveal from the blue button (freeze blur effect)
+    const overlayEl = overlayRef.current
+    if (overlayEl) {
+      let btnEl: HTMLElement | null = null
+      const rootNode = overlayEl.getRootNode() as Document | ShadowRoot
+      if ((rootNode as ShadowRoot).host) {
+        try {
+          btnEl = (rootNode as ShadowRoot).getElementById?.(
+            "toggle-frosted-overlay-btn"
+          ) as HTMLElement | null
+        } catch {}
+      }
+      if (!btnEl && typeof document !== "undefined") {
+        btnEl = document.getElementById(
+          "toggle-frosted-overlay-btn"
+        ) as HTMLElement | null
+      }
+
+      const vw = window.innerWidth
+      const vh = window.innerHeight
+      let x = vw / 2
+      let y = vh / 2
+      if (btnEl) {
+        const r = btnEl.getBoundingClientRect()
+        x = r.left + r.width / 2
+        y = r.top + r.height / 2
+      }
+
+      const distTL = Math.hypot(x - 0, y - 0)
+      const distTR = Math.hypot(x - vw, y - 0)
+      const distBL = Math.hypot(x - 0, y - vh)
+      const distBR = Math.hypot(x - vw, y - vh)
+      const maxR = Math.ceil(Math.max(distTL, distTR, distBL, distBR)) + 20
+
+      overlayEl.style.clipPath = `circle(0px at ${x}px ${y}px)`
+      overlayEl.style.setProperty("--blur", "0px")
+      overlayEl.style.backgroundColor = "rgba(11, 87, 208, 0.20)" // 淡蓝色起始色，与按钮呼应
+
+      animate(
+        overlayEl as Element,
+        {
+          clipPath: [
+            `circle(0px at ${x}px ${y}px)`,
+            `circle(${maxR}px at ${x}px ${y}px)`
+          ],
+          "--blur": ["0px", "8px"],
+          backgroundColor: [
+            "rgba(11, 87, 208, 0.20)",
+            "rgba(20, 18, 13, 0.22)"
+          ]
+        } as any,
+        { duration: 0.6, easing: "cubic-bezier(0.22, 1, 0.36, 1)", fill: "forwards" } as any
+      )
+    }
+
     const onKey = (e: KeyboardEvent) => {
       // if (e.key === "Escape") onClose()
     }
@@ -209,15 +278,41 @@ export function Overlay({ onClose }: { onClose: () => void }) {
     return () => window.removeEventListener("keydown", onKey, { capture: true })
   }, [onClose])
 
+  useEffect(() => {
+    // Card cascade: fade in, rotate from 0deg, y -10px -> 0px
+    const root = listRef.current
+    if (!root) return
+    const cards = root.querySelectorAll<HTMLElement>(".project-wrapped")
+    cards.forEach((el, i) => {
+      el.style.opacity = "0"
+      el.style.transform = "rotate(0deg) translateY(-10px)"
+      const finalRotate = i % 2 === 0 ? 3 : -3
+      animate(
+        el as Element,
+        {
+          opacity: [0, 1],
+          transform: [
+            "rotate(0deg) translateY(-10px)",
+            `rotate(${finalRotate}deg) translateY(0px)`
+          ]
+        } as any,
+        { duration: 0.6, delay: i * 0.06, easing: "cubic-bezier(0.22, 1, 0.36, 1)", fill: "forwards" } as any
+      )
+    })
+  }, [])
+
   return (
     <>
       <style>{styles}</style>
-      <section className="overlay" role="dialog" aria-modal="true">
+      <section className="overlay" role="dialog" aria-modal="true" ref={overlayRef}>
 
         {/* Scrollable project list */}
         <div className="portfolio-section">
-          <div className="image-overlay-wrap portfolio">
-            <a href="#" className="project-wrapped w-inline-block">
+          <div className="image-overlay-wrap portfolio" ref={listRef}>
+            <a
+              href="#"
+              className="project-wrapped w-inline-block"
+            >
               <div className="project-cover-wrapper gh">
                 <div className="stretched">
                   <img src={slide1} alt="Creative Project 1" loading="lazy" />
@@ -330,6 +425,8 @@ export function Overlay({ onClose }: { onClose: () => void }) {
 
 // --- Mount / unmount helpers ---
 let mountContainer: HTMLDivElement | null = null
+let reactRoot: Root | null = null
+let isExiting = false
 
 function mountOverlay() {
   try {
@@ -338,7 +435,8 @@ function mountOverlay() {
     mountContainer = document.createElement("div")
     shadow.appendChild(mountContainer)
     const handleClose = () => unmountOverlay()
-    render(<Overlay onClose={handleClose} />, mountContainer)
+    reactRoot = createRoot(mountContainer)
+    reactRoot.render(<Overlay onClose={handleClose} />)
   } catch (error) {
     console.warn("Error mounting overlay:", error)
   }
@@ -346,11 +444,82 @@ function mountOverlay() {
 
 function unmountOverlay() {
   try {
-    if (mountContainer) {
-      unmountComponentAtNode(mountContainer)
-      mountContainer.remove()
-      mountContainer = null
+    if (!mountContainer) return
+
+    // Try to play exit animation if overlay element is present
+    const overlayEl = mountContainer.querySelector('section.overlay') as HTMLElement | null
+    const { shadow } = ensureShadowHost()
+    const btnEl = shadow.getElementById('toggle-frosted-overlay-btn') as HTMLElement | null
+
+    if (overlayEl && !isExiting) {
+      isExiting = true
+      const vw = window.innerWidth
+      const vh = window.innerHeight
+      let x = vw / 2
+      let y = vh / 2
+      if (btnEl) {
+        const r = btnEl.getBoundingClientRect()
+        x = r.left + r.width / 2
+        y = r.top + r.height / 2
+      }
+      const distTL = Math.hypot(x - 0, y - 0)
+      const distTR = Math.hypot(x - vw, y - 0)
+      const distBL = Math.hypot(x - 0, y - vh)
+      const distBR = Math.hypot(x - vw, y - vh)
+      const maxR = Math.ceil(Math.max(distTL, distTR, distBL, distBR)) + 20
+
+      // Ensure starting state matches the fully-open overlay
+      overlayEl.style.clipPath = `circle(${maxR}px at ${x}px ${y}px)`
+      overlayEl.style.setProperty('--blur', '8px')
+      overlayEl.style.backgroundColor = 'rgba(20, 18, 13, 0.22)'
+
+      const finish = () => {
+        try {
+          if (reactRoot) {
+            reactRoot.unmount()
+            reactRoot = null
+          }
+          mountContainer?.remove()
+          mountContainer = null
+        } catch (e) {
+          console.warn('Error during final unmount:', e)
+        } finally {
+          isExiting = false
+        }
+      }
+
+      const controls: any = animate(
+        overlayEl as Element,
+        {
+          clipPath: [
+            `circle(${maxR}px at ${x}px ${y}px)`,
+            `circle(0px at ${x}px ${y}px)`
+          ],
+          '--blur': ['8px', '0px'],
+          backgroundColor: [
+            'rgba(20, 18, 13, 0.22)',
+            'rgba(11, 87, 208, 0.20)'
+          ]
+        } as any,
+        { duration: 0.6, easing: 'cubic-bezier(0.22, 1, 0.36, 1)', fill: 'forwards' } as any
+      )
+
+      if (controls && controls.finished && typeof controls.finished.then === 'function') {
+        controls.finished.then(finish).catch(finish)
+      } else {
+        // Fallback
+        setTimeout(finish, 650)
+      }
+      return
     }
+
+    // If no element or already exiting, unmount immediately
+    if (reactRoot) {
+      reactRoot.unmount()
+      reactRoot = null
+    }
+    mountContainer.remove()
+    mountContainer = null
   } catch (error) {
     console.warn("Error unmounting overlay:", error)
   }
@@ -444,31 +613,7 @@ window.addEventListener("unhandledrejection", (event) => {
   }
 })
 
-// Override the global throw function to catch extension context errors
-const originalThrow = window.throw || (() => {})
-window.throw = function (error) {
-  if (error?.message?.includes("Extension context invalidated")) {
-    console.warn(
-      "Extension context invalidated - this is normal during development reloads"
-    )
-    return
-  }
-  throw error
-}
-
-// Override Error.prototype.throw to catch extension context errors
-const originalErrorThrow = Error.prototype.throw
-if (originalErrorThrow) {
-  Error.prototype.throw = function () {
-    if (this.message?.includes("Extension context invalidated")) {
-      console.warn(
-        "Extension context invalidated - this is normal during development reloads"
-      )
-      return
-    }
-    return originalErrorThrow.apply(this, arguments)
-  }
-}
+// (Removed custom window/Error throw overrides to avoid TypeScript and runtime issues)
 
 // Setup listener when script loads (with delay to ensure context is ready)
 setTimeout(() => {

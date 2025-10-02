@@ -56,6 +56,7 @@ try {
 // --- Shadow host setup ---
 const HOST_ID = "__frosted_takeover_overlay_host__"
 const BTN_ID = "__frosted_overlay_toggle_btn__"
+const VOLUME_BAR_COUNT = 48
 
 function ensureShadowHost(): { host: HTMLDivElement; shadow: ShadowRoot } {
   let host = document.getElementById(HOST_ID) as HTMLDivElement | null
@@ -177,8 +178,8 @@ const styles = `
 }
 .n-container.hero { width: 100%; height: 100%; position: relative; display: flex; align-items: center; justify-content: center; }
 .portfolio-section { position: relative; z-index: 2; margin-top: 40vh; }
-.image-overlay-wrap.portfolio { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 60px; padding: 60px 0; position: relative; max-width: 1200px; margin: 0 auto; z-index: 3; transition: all; }
-.project-wrapped { display: flex; flex-direction: column; width: 50vw; max-width: 960px; min-width: 280px; height: auto; text-decoration: none; color: inherit; transition: all; box-shadow: #14120d 0px 2px 5px 0px; position: relative; scroll-snap-align: center; scroll-snap-stop: always; opacity: 0; animation: card-fade-in 0.6s ease forwards; }
+.image-overlay-wrap.portfolio { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 60px; padding: 60px 0; position: relative; max-width: 1200px; margin: 0 auto; z-index: 3; transition: all; --card-width: 50vw; }
+.project-wrapped { display: flex; flex-direction: column; width: clamp(280px, var(--card-width, 50vw), 960px); height: auto; text-decoration: none; color: inherit; transition: all; box-shadow: #14120d 0px 2px 5px 0px; position: relative; scroll-snap-align: center; scroll-snap-stop: always; opacity: 0; animation: card-fade-in 0.6s ease forwards; }
 .image-overlay-wrap.portfolio > .project-wrapped:nth-child(1) { animation-delay: 0.05s; }
 .image-overlay-wrap.portfolio > .project-wrapped:nth-child(2) { animation-delay: 0.1s; }
 .image-overlay-wrap.portfolio > .project-wrapped:nth-child(3) { animation-delay: 0.15s; }
@@ -187,8 +188,8 @@ const styles = `
 .image-overlay-wrap.portfolio > .project-wrapped:nth-child(6) { animation-delay: 0.3s; }
 .image-overlay-wrap.portfolio > .project-wrapped:nth-child(7) { animation-delay: 0.35s; }
 .image-overlay-wrap.portfolio > .project-wrapped:nth-child(8) { animation-delay: 0.4s; }
-.image-overlay-wrap.portfolio > .project-wrapped:nth-child(odd) { transform: matrix(0.99863, 0.052336, -0.052336, 0.99863, 0, 0); }
-.image-overlay-wrap.portfolio > .project-wrapped:nth-child(even) { transform: matrix(0.99863, -0.052336, 0.052336, 0.99863, 0, 0); }
+.image-overlay-wrap.portfolio > .project-wrapped:not(.record-card):nth-child(odd) { transform: matrix(0.99863, 0.052336, -0.052336, 0.99863, 0, 0); }
+.image-overlay-wrap.portfolio > .project-wrapped:not(.record-card):nth-child(even) { transform: matrix(0.99863, -0.052336, 0.052336, 0.99863, 0, 0); }
 .project-cover-wrapper { display: flex; align-items: center; justify-content: center; width: 100%; height: auto; padding: 0; overflow: hidden; transition: all; }
 .project-cover-wrapper.gh { background-color: #f5f2ed; }
 .project-cover-wrapper.kori { background-color: #2a2a2a; }
@@ -204,16 +205,388 @@ const styles = `
 .project-description-wrapper h2 { color: #121111; font-size: clamp(12px, 1.5vw, 22px); line-height: 1.5; text-align: center; font-weight: 400; margin-bottom: clamp(10px, 1vw, 18px); max-width: 85%; margin-left: auto; margin-right: auto; }
 .service-tags { text-align: center; font-size: clamp(10px, 1.1vw, 18px); color: #121111; line-height: 1.6; }
 .project-wrapped:hover .stretched img { filter: grayscale(100%); }
-@media (max-width: 1200px) { .image-overlay-wrap.portfolio { padding: 40px 20px; } .project-wrapped { width: 90%; max-width: 720px; } .project-cover-wrapper, .project-description-wrapper { width: 100%; } }
+@media (max-width: 1200px) { .image-overlay-wrap.portfolio { padding: 40px 20px; } .project-wrapped { width: min(90%, clamp(280px, var(--card-width, 50vw), 720px)); } .project-cover-wrapper, .project-description-wrapper { width: 100%; } }
 @media (max-width: 480px) { .image-overlay-wrap.portfolio { gap: 40px; padding: 30px 15px; } .project-cover-wrapper { height: 200px; padding: 0; } .stretched { width: 100%; height: auto; max-height: 200px; } .stretched img { width: 100%; height: auto; max-height: 200px; } }
 .hero-content { text-align: center; color: #121111; }
 .hero-content h1 { font-size: 48px; font-weight: 400; margin-bottom: 20px; letter-spacing: 2px; }
 .hero-content p { font-size: 14px; line-height: 20px; max-width: 500px; margin: 0 auto; }
+.project-wrapped.record-card { cursor: pointer; background-color: rgba(254, 255, 217, 0.92); border: 1px solid rgba(20, 18, 13, 0.15); box-shadow: #14120d 0px 3px 12px 0px; transition: transform 0.25s ease, box-shadow 0.25s ease; }
+.project-wrapped.record-card:hover { box-shadow: #14120d 0px 6px 18px 0px; transform: translateY(-2px); }
+.project-wrapped.record-card:focus-visible { outline: 2px solid #0b57d0; outline-offset: 4px; box-shadow: #0b57d0 0px 0px 0px 2px inset; }
+.project-cover-wrapper.recorder { background: linear-gradient(135deg, rgba(245, 242, 237, 0.95), rgba(193, 206, 245, 0.65)); min-height: clamp(180px, 28vh, 320px); }
+.recording-panel { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: clamp(8px, 1.2vw, 18px); text-align: center; color: #121111; padding: clamp(20px, 3vw, 40px); width: 100%; }
+.recording-status { display: flex; align-items: center; gap: clamp(8px, 1vw, 16px); font-size: clamp(12px, 1.4vw, 22px); font-weight: 500; }
+.record-status-dot { width: clamp(10px, 1.2vw, 16px); height: clamp(10px, 1.2vw, 16px); border-radius: 50%; background: #d70015; box-shadow: 0 0 8px rgba(215, 0, 21, 0.45); opacity: 0.85; }
+.record-status-dot.active { animation: record-pulse 1.4s ease-in-out infinite; }
+.recording-subtext { font-size: clamp(12px, 1.15vw, 18px); color: #3d3a30; max-width: 90%; margin: 0 auto; }
+.project-description-wrapper.record-description { display: flex; flex-direction: column; align-items: center; gap: clamp(12px, 1.4vw, 24px); }
+.project-description-wrapper.record-description audio { width: 100%; outline: none; }
+.record-placeholder { width: 100%; text-align: center; color: #6f6a60; font-size: clamp(11px, 1.1vw, 17px); border: 1px dashed rgba(20, 18, 13, 0.2); padding: clamp(12px, 1.6vw, 20px); border-radius: 8px; background: rgba(254, 255, 217, 0.4); }
+.record-error { margin-top: 4px; color: #d70015; font-size: clamp(11px, 1.05vw, 16px); text-align: center; }
+.transcribing-indicator { display: flex; align-items: center; gap: clamp(8px, 1vw, 16px); color: #3d3a30; font-size: clamp(12px, 1.2vw, 18px); }
+.spinner { width: clamp(14px, 1.6vw, 20px); height: clamp(14px, 1.6vw, 20px); border: 3px solid rgba(11, 87, 208, 0.2); border-top-color: #0b57d0; border-radius: 50%; animation: spinner-rotate 0.9s linear infinite; }
+.transcription-box { width: 100%; text-align: left; color: #121111; font-size: clamp(12px, 1.2vw, 18px); line-height: 1.6; background: rgba(254, 255, 217, 0.7); border-radius: 10px; padding: clamp(14px, 1.8vw, 24px); border: 1px solid rgba(20, 18, 13, 0.12); box-shadow: inset 0 1px 3px rgba(20, 18, 13, 0.12); white-space: pre-wrap; word-break: break-word; }
+.volume-visualizer { width: 100%; height: clamp(54px, 6.5vw, 110px); display: flex; align-items: center; gap: clamp(3px, 0.5vw, 6px); padding: clamp(10px, 1.2vw, 14px) clamp(8px, 1vw, 12px); border-radius: 14px; background: linear-gradient(180deg, rgba(255, 255, 255, 0.75) 0%, rgba(254, 255, 217, 0.55) 100%); border: 1px solid rgba(11, 87, 208, 0.2); box-shadow: inset 0 1px 6px rgba(11, 87, 208, 0.15), 0 8px 18px rgba(11, 87, 208, 0.12); transition: opacity 0.25s ease, transform 0.25s ease; }
+.volume-bar { flex: 1; height: 100%; border-radius: 999px; background: linear-gradient(180deg, rgba(11, 87, 208, 0.95) 0%, rgba(11, 87, 208, 0.45) 100%); box-shadow: 0 4px 10px rgba(11, 87, 208, 0.18); transform-origin: center; transition: transform 0.12s ease-out, opacity 0.25s ease; }
+.volume-bar.muted { opacity: 0.2; }
+.volume-visualizer.idle { opacity: 0.45; transform: translateY(4px); }
+@keyframes record-pulse { 0% { transform: scale(1); opacity: 0.8; } 50% { transform: scale(1.35); opacity: 0.4; } 100% { transform: scale(1); opacity: 0.8; } }
+@keyframes spinner-rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+.card-size-control { position: fixed; right: clamp(16px, 3vw, 36px); bottom: clamp(16px, 3vw, 36px); display: flex; align-items: center; gap: clamp(10px, 1.2vw, 18px); padding: clamp(10px, 1.4vw, 18px); background: rgba(20, 18, 13, 0.7); border-radius: 18px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); z-index: 2147483647; color: #feffd9; }
+.card-size-control span { font-size: clamp(12px, 1.2vw, 16px); opacity: 0.8; }
+.card-size-actions { display: flex; gap: clamp(8px, 1vw, 14px); }
+.card-size-btn { min-width: clamp(40px, 4vw, 64px); padding: clamp(6px, 0.8vw, 10px) clamp(10px, 1.2vw, 14px); border-radius: 999px; border: 1px solid rgba(254, 255, 217, 0.25); background: rgba(254, 255, 217, 0.12); color: inherit; font-size: clamp(12px, 1.2vw, 16px); cursor: pointer; transition: all 0.2s ease; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.card-size-btn:hover { background: rgba(254, 255, 217, 0.2); border-color: rgba(254, 255, 217, 0.4); }
+.card-size-btn.active { background: #feffd9; color: #201f1a; border-color: transparent; box-shadow: 0 4px 18px rgba(254, 255, 217, 0.35); }
+.card-size-btn span { font-size: clamp(10px, 1vw, 14px); opacity: 0.65; }
 `
 
 export function Overlay({ onClose }: { onClose: () => void }) {
   const listRef = React.useRef<HTMLDivElement | null>(null)
   const overlayRef = React.useRef<HTMLElement | null>(null)
+  const [isRecording, setIsRecording] = React.useState(false)
+  const [recordError, setRecordError] = React.useState<string | null>(null)
+  const [audioUrl, setAudioUrl] = React.useState<string | null>(null)
+  const [isTranscribing, setIsTranscribing] = React.useState(false)
+  const [transcription, setTranscription] = React.useState<string | null>(null)
+  const [transcribeError, setTranscribeError] = React.useState<string | null>(null)
+  const [cardWidthRatio, setCardWidthRatio] = React.useState(0.5)
+  const [volumeLevels, setVolumeLevels] = React.useState<number[]>(() =>
+    Array.from({ length: VOLUME_BAR_COUNT }, () => 0)
+  )
+  const previousLevelsRef = React.useRef<number[]>(
+    Array.from({ length: VOLUME_BAR_COUNT }, () => 0)
+  )
+  const mediaRecorderRef = React.useRef<MediaRecorder | null>(null)
+  const audioChunksRef = React.useRef<Blob[]>([])
+  const audioUrlRef = React.useRef<string | null>(null)
+  const audioBlobRef = React.useRef<Blob | null>(null)
+  const isMountedRef = React.useRef(true)
+  const transcribeJobRef = React.useRef(0)
+  const audioContextRef = React.useRef<AudioContext | null>(null)
+  const analyserRef = React.useRef<AnalyserNode | null>(null)
+  const dataArrayRef = React.useRef<Uint8Array | null>(null)
+  const volumeRafRef = React.useRef<number | null>(null)
+  const streamSourceRef = React.useRef<MediaStreamAudioSourceNode | null>(null)
+  const openaiApiKey = process.env.PLASMO_PUBLIC_OPENAI_KEY as string | undefined
+  const cardSizeOptions = React.useMemo(
+    () => [
+      { label: "S", value: 0.3, percent: "30%" },
+      { label: "M", value: 0.5, percent: "50%" },
+      { label: "L", value: 0.7, percent: "70%" }
+    ],
+    []
+  )
+
+  const stopVolumeMeter = React.useCallback(() => {
+    if (volumeRafRef.current) {
+      cancelAnimationFrame(volumeRafRef.current)
+      volumeRafRef.current = null
+    }
+    try {
+      streamSourceRef.current?.disconnect()
+      analyserRef.current?.disconnect()
+    } catch {}
+    streamSourceRef.current = null
+    analyserRef.current = null
+    if (audioContextRef.current) {
+      // Closing an already closed context throws
+      const ctx = audioContextRef.current
+      if (ctx.state !== "closed") {
+        ctx.close().catch(() => undefined)
+      }
+    }
+    audioContextRef.current = null
+    dataArrayRef.current = null
+    previousLevelsRef.current = Array.from({ length: VOLUME_BAR_COUNT }, () => 0)
+    setVolumeLevels(Array.from({ length: VOLUME_BAR_COUNT }, () => 0))
+  }, [])
+
+  const startVolumeMeter = React.useCallback(
+    async (stream: MediaStream) => {
+      try {
+        stopVolumeMeter()
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext
+        if (!AudioCtx) {
+          return
+        }
+
+        const audioCtx = new AudioCtx()
+        audioContextRef.current = audioCtx
+        if (audioCtx.state === "suspended") {
+          try {
+            await audioCtx.resume()
+          } catch (resumeError) {
+            console.warn("Audio context resume failed", resumeError)
+          }
+        }
+        const source = audioCtx.createMediaStreamSource(stream)
+        streamSourceRef.current = source
+        const analyser = audioCtx.createAnalyser()
+        analyser.fftSize = 2048
+        analyser.smoothingTimeConstant = 0.65
+        analyserRef.current = analyser
+        const bufferLength = analyser.fftSize
+        const dataArray = new Uint8Array(bufferLength)
+        dataArrayRef.current = dataArray
+
+        source.connect(analyser)
+
+        const barCount = VOLUME_BAR_COUNT
+        const smoothFactor = 0.35
+
+        const tick = () => {
+          if (!analyserRef.current || !dataArrayRef.current) {
+            return
+          }
+          analyserRef.current.getByteTimeDomainData(dataArrayRef.current)
+          const segmentSize = Math.max(1, Math.floor(dataArrayRef.current.length / barCount))
+          const nextLevels: number[] = []
+          for (let i = 0; i < barCount; i++) {
+            const start = i * segmentSize
+            let sumSquares = 0
+            for (let j = 0; j < segmentSize && start + j < dataArrayRef.current.length; j++) {
+              const sample = dataArrayRef.current[start + j] - 128
+              sumSquares += sample * sample
+            }
+            const rms = Math.sqrt(sumSquares / segmentSize) / 128 || 0
+            nextLevels.push(rms)
+          }
+          const smoothedLevels = nextLevels.map((level, idx) => {
+            const previous = previousLevelsRef.current[idx] ?? 0
+            const blended = previous * (1 - smoothFactor) + level * smoothFactor
+            return Math.min(1, Math.max(0, blended))
+          })
+          previousLevelsRef.current = smoothedLevels
+          setVolumeLevels(smoothedLevels)
+          volumeRafRef.current = requestAnimationFrame(tick)
+        }
+
+        volumeRafRef.current = requestAnimationFrame(tick)
+      } catch (error) {
+        console.warn("Unable to initialise volume meter", error)
+      }
+    },
+    [stopVolumeMeter]
+  )
+
+  const transcribeAudio = React.useCallback(
+    async (blob: Blob, jobId: number) => {
+      if (transcribeJobRef.current !== jobId) {
+        return
+      }
+
+      if (!openaiApiKey) {
+        setTranscribeError("Please configure the OpenAI API key before transcribing.")
+        return
+      }
+
+      setIsTranscribing(true)
+      setTranscribeError(null)
+
+      try {
+        const formData = new FormData()
+        formData.append("model", "gpt-4o-mini-transcribe")
+        formData.append("file", blob, `recording-${Date.now()}.webm`)
+
+        const response = await fetch(
+          "https://api.openai.com/v1/audio/transcriptions",
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${openaiApiKey}`
+            },
+            body: formData
+          }
+        )
+
+        if (!response.ok) {
+          const errorBody = await response.json().catch(() => null)
+          const message =
+            errorBody?.error?.message || "Transcription failed, please try again later."
+          throw new Error(message)
+        }
+
+        const data = await response.json()
+        const text = data?.text || data?.data?.[0]?.text || ""
+        if (!isMountedRef.current || transcribeJobRef.current !== jobId) return
+        setTranscription(text || "(No transcription available yet)")
+      } catch (error: any) {
+        if (!isMountedRef.current || transcribeJobRef.current !== jobId) return
+        console.warn("Transcription failed", error)
+        setTranscribeError(error?.message || "Transcription failed, please try again later.")
+      } finally {
+        if (isMountedRef.current && transcribeJobRef.current === jobId) {
+          setIsTranscribing(false)
+        }
+      }
+    },
+    [openaiApiKey]
+  )
+
+  const updateAudioUrl = React.useCallback((url: string | null) => {
+    setAudioUrl((prev) => {
+      if (prev) {
+        URL.revokeObjectURL(prev)
+      }
+      return url
+    })
+    audioUrlRef.current = url
+    if (!url) {
+      audioBlobRef.current = null
+    }
+  }, [])
+
+  const stopRecording = React.useCallback(() => {
+    const recorder = mediaRecorderRef.current
+    if (recorder && recorder.state !== "inactive") {
+      recorder.stop()
+    }
+  }, [])
+
+  const startRecording = React.useCallback(async () => {
+    setRecordError(null)
+    setTranscription(null)
+    setTranscribeError(null)
+    setIsTranscribing(false)
+    audioBlobRef.current = null
+    transcribeJobRef.current += 1
+
+    if (typeof MediaRecorder === "undefined") {
+      setRecordError("This browser does not support audio recording.")
+      return
+    }
+
+    if (
+      typeof navigator === "undefined" ||
+      !navigator.mediaDevices?.getUserMedia
+    ) {
+      setRecordError("Unable to access the microphone in this environment.")
+      return
+    }
+
+    try {
+      updateAudioUrl(null)
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const recorder = new MediaRecorder(stream)
+      mediaRecorderRef.current = recorder
+      audioChunksRef.current = []
+
+      await startVolumeMeter(stream)
+
+      recorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          audioChunksRef.current.push(event.data)
+        }
+      }
+
+      recorder.onerror = (event) => {
+        console.warn("Recorder error", event)
+        stopVolumeMeter()
+        stream.getTracks().forEach((track) => track.stop())
+        mediaRecorderRef.current = null
+        audioChunksRef.current = []
+        if (!isMountedRef.current) {
+          return
+        }
+        setRecordError("Something went wrong while recording, please try again.")
+        setIsRecording(false)
+      }
+
+      recorder.onstop = () => {
+        stopVolumeMeter()
+        stream.getTracks().forEach((track) => track.stop())
+        const chunks = audioChunksRef.current
+        mediaRecorderRef.current = null
+        audioChunksRef.current = []
+
+        const shouldUpdate = chunks.length > 0
+        const mimeType = recorder.mimeType || "audio/webm"
+        const blob = shouldUpdate ? new Blob(chunks, { type: mimeType }) : null
+        const url = blob ? URL.createObjectURL(blob) : null
+
+        if (!isMountedRef.current) {
+          if (url) {
+            URL.revokeObjectURL(url)
+          }
+          return
+        }
+
+        if (url) {
+          updateAudioUrl(url)
+          audioBlobRef.current = blob
+          const jobId = transcribeJobRef.current
+          if (blob) {
+            void transcribeAudio(blob, jobId)
+          }
+        } else {
+          updateAudioUrl(null)
+          audioBlobRef.current = null
+        }
+        setIsRecording(false)
+      }
+
+      recorder.start()
+      setIsRecording(true)
+    } catch (error) {
+      console.warn("Failed to start recording", error)
+      updateAudioUrl(null)
+      if (!isMountedRef.current) {
+        return
+      }
+      stopVolumeMeter()
+      setRecordError("Unable to start recording. Please check microphone permissions.")
+      setIsRecording(false)
+    }
+  }, [startVolumeMeter, stopVolumeMeter, transcribeAudio, updateAudioUrl])
+
+  const handleRecordCardAction = React.useCallback(async () => {
+    if (isRecording) {
+      stopRecording()
+      return
+    }
+    await startRecording()
+  }, [isRecording, startRecording, stopRecording])
+
+  const handleRecordCardClick = React.useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      event.preventDefault()
+      event.stopPropagation()
+      void handleRecordCardAction()
+    },
+    [handleRecordCardAction]
+  )
+
+  const handleRecordCardKeyDown = React.useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault()
+        void handleRecordCardAction()
+      }
+    },
+    [handleRecordCardAction]
+  )
+
+  const handleCardSizeSelect = React.useCallback((value: number) => {
+    setCardWidthRatio(value)
+  }, [])
+
+  React.useEffect(() => {
+    isMountedRef.current = true
+    return () => {
+      isMountedRef.current = false
+      const recorder = mediaRecorderRef.current
+      if (recorder && recorder.state !== "inactive") {
+        recorder.stop()
+      }
+      mediaRecorderRef.current = null
+      if (audioUrlRef.current) {
+        URL.revokeObjectURL(audioUrlRef.current)
+        audioUrlRef.current = null
+      }
+      stopVolumeMeter()
+    }
+  }, [stopVolumeMeter])
 
   useEffect(() => {
     // Overlay reveal from the blue button (freeze blur effect)
@@ -252,7 +625,7 @@ export function Overlay({ onClose }: { onClose: () => void }) {
 
       overlayEl.style.clipPath = `circle(0px at ${x}px ${y}px)`
       overlayEl.style.setProperty("--blur", "0px")
-      overlayEl.style.backgroundColor = "rgba(11, 87, 208, 0.20)" // 淡蓝色起始色，与按钮呼应
+      overlayEl.style.backgroundColor = "rgba(11, 87, 208, 0.20)" // Light blue starting color to match the button
 
       animate(
         overlayEl as Element,
@@ -308,7 +681,108 @@ export function Overlay({ onClose }: { onClose: () => void }) {
 
         {/* Scrollable project list */}
         <div className="portfolio-section">
-          <div className="image-overlay-wrap portfolio" ref={listRef}>
+          <div
+            className="image-overlay-wrap portfolio"
+            ref={listRef}
+            style={{ ["--card-width" as any]: `${cardWidthRatio * 100}vw` }}
+          >
+            <div
+              className="project-wrapped record-card"
+              role="button"
+              tabIndex={0}
+              onClick={handleRecordCardClick}
+              onKeyDown={handleRecordCardKeyDown}
+              aria-pressed={isRecording}
+            >
+              <div className="project-cover-wrapper recorder">
+                <div className="recording-panel">
+                  <div className="recording-status">
+                    <span
+                      className={`record-status-dot${isRecording ? " active" : ""}`}
+                      aria-hidden="true"
+                    />
+                    <span>
+                      {isRecording
+                        ? "Recording… click to stop"
+                        : isTranscribing
+                        ? "Processing audio… please wait"
+                        : audioUrl
+                        ? "Recording saved, click to record again"
+                        : "Click to start recording"}
+                    </span>
+                  </div>
+                  <div
+                    className={`volume-visualizer${!isRecording ? " idle" : ""}`}
+                    style={{ ["--volume-bars" as any]: volumeLevels.length }}
+                    aria-hidden="true"
+                  >
+                    {volumeLevels.map((level, index) => {
+                      const adjusted = Math.max(0.1, Math.pow(level, 0.8))
+                      return (
+                        <span
+                          key={index}
+                          className={`volume-bar${level < 0.05 ? " muted" : ""}`}
+                          style={{ transform: `scaleY(${Math.min(1, adjusted)})` }}
+                        />
+                      )
+                    })}
+                  </div>
+                  <p className="recording-subtext">
+                    {isRecording
+                      ? "Audio is being captured—click again when you're done."
+                      : isTranscribing
+                      ? "Uploading and sending to OpenAI for transcription. Please keep this window open."
+                      : audioUrl
+                      ? "Recording saved—you can play it back or capture a new one."
+                      : "The first click will request microphone access and start recording immediately."}
+                  </p>
+                </div>
+              </div>
+              <div className="project-description-wrapper record-description">
+                <h4 className="center-aligned black">Voice Notes Card</h4>
+                <h2 className="smaller black">
+                  {audioUrl
+                    ? isTranscribing
+                      ? "Recording saved—transcribing now."
+                      : transcription
+                      ? "Transcription below. Record again to update it."
+                      : "Recording finished—use the player to listen back."
+                    : "Click the card to start recording; playback and transcription will appear here."}
+                </h2>
+                {recordError ? (
+                  <div className="record-error" role="alert">
+                    {recordError}
+                  </div>
+                ) : null}
+                {transcribeError ? (
+                  <div className="record-error" role="alert">
+                    {transcribeError}
+                  </div>
+                ) : null}
+                {audioUrl ? (
+                  <audio
+                    key={audioUrl}
+                    controls
+                    src={audioUrl}
+                    preload="metadata"
+                  />
+                ) : (
+                  <div className="record-placeholder">
+                    Once you finish recording, the audio will appear here.
+                  </div>
+                )}
+                {isTranscribing ? (
+                  <div className="transcribing-indicator">
+                    <span className="spinner" aria-hidden="true" />
+                    <span>Transcribing audio…</span>
+                  </div>
+                ) : transcription ? (
+                  <div className="transcription-box">
+                    {transcription}
+                  </div>
+                ) : null}
+              </div>
+            </div>
             <a
               href="#"
               className="project-wrapped w-inline-block"
@@ -419,6 +893,27 @@ export function Overlay({ onClose }: { onClose: () => void }) {
           </div>
         </div>
       </section>
+      <div className="card-size-control" role="group" aria-label="Card size selector">
+        <span>Card size</span>
+        <div className="card-size-actions">
+          {cardSizeOptions.map((option) => {
+            const isActive = Math.abs(cardWidthRatio - option.value) < 0.001
+            return (
+              <button
+                key={option.label}
+                type="button"
+                className={`card-size-btn${isActive ? " active" : ""}`}
+                onClick={() => handleCardSizeSelect(option.value)}
+                aria-pressed={isActive}
+                title={`${option.percent} viewport width`}
+              >
+                {option.label}
+                <span>{option.percent}</span>
+              </button>
+            )
+          })}
+        </div>
+      </div>
     </>
   )
 }

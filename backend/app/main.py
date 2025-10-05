@@ -373,3 +373,93 @@ async def analyze_page(req: AnalysisRequest) -> AnalysisResponse:
     return AnalysisResponse(suggestions=suggestions, model=settings["model"], usage_tokens=usage_tokens)
 
 
+# --------- Specialized endpoints: summarize and suggest ---------
+
+class SummaryResponse(BaseModel):
+    summary: str
+    model: str
+    usage_tokens: Optional[int] = None
+
+
+async def run_responses_api(req: AnalysisRequest, mode: str) -> Dict[str, Any]:
+    """mode: 'summary' | 'suggest'
+    Reuses the multimodal-with-fallback flow, but changes the instruction.
+    """
+    settings = get_gpt_settings()
+
+    base_instruction = (
+        "Summarize the page content clearly and concisely. Avoid speculation."
+        if mode == "summary"
+        else "Analyze the page and propose specific, safe UI actions with brief rationale."
+    )
+    # Build text
+    req_for_text = AnalysisRequest(
+        page_url=req.page_url,
+        dom_html=req.dom_html,
+        screenshots=req.screenshots,
+        user_prompt=base_instruction,
+    )
+
+    # Prefer multimodal if screenshots provided; fallback to text-only
+    use_blocks = len(req.screenshots) > 0
+    try:
+        if use_blocks:
+            blocks = build_input_blocks(req_for_text)
+            payload_blocks = {
+                "model": settings["model"],
+                "input": blocks,
+                "reasoning": {"effort": "minimal"},
+                "text": {"verbosity": "low"},
+                "max_output_tokens": 800,
+            }
+            return await call_gpt_api(payload_blocks)
+        raise HTTPException(status_code=599, detail="skip-to-text")
+    except HTTPException as he:
+        if he.status_code in (400, 415, 422, 599):
+            text_input = build_input_text(req_for_text)
+            payload_text = {
+                "model": settings["model"],
+                "input": text_input,
+                "reasoning": {"effort": "minimal"},
+                "text": {"verbosity": "low"},
+                "max_output_tokens": 800,
+            }
+            return await call_gpt_api(payload_text)
+        raise
+
+
+def extract_output_text(data: Dict[str, Any]) -> tuple[str, Optional[int]]:
+    text = data.get("output_text") or ""
+    if not text and isinstance(data.get("output"), list):
+        parts: List[str] = []
+        for item in data["output"]:
+            if item.get("type") == "message":
+                for c in item.get("content", []):
+                    if c.get("type") == "output_text" and "text" in c:
+                        parts.append(str(c["text"]))
+            elif item.get("type") == "output_text" and "text" in item:
+                parts.append(str(item["text"]))
+        text = "\n".join([p for p in parts if p])
+    try:
+        usage_tokens = int(data.get("usage", {}).get("total_tokens"))
+    except Exception:
+        usage_tokens = None
+    return text, usage_tokens
+
+
+@app.post("/api/summarize", response_model=SummaryResponse)
+async def summarize_page(req: AnalysisRequest) -> SummaryResponse:
+    data = await run_responses_api(req, mode="summary")
+    text, usage_tokens = extract_output_text(data)
+    return SummaryResponse(summary=text, model=get_gpt_settings()["model"], usage_tokens=usage_tokens)
+
+
+@app.post("/api/suggest", response_model=AnalysisResponse)
+async def suggest_actions(req: AnalysisRequest) -> AnalysisResponse:
+    data = await run_responses_api(req, mode="suggest")
+    text, usage_tokens = extract_output_text(data)
+    lines = [l.strip(" -•\t") for l in text.splitlines() if l.strip()]
+    suggestions = [Suggestion(description=l, actions=[]) for l in lines[:10]]
+    return AnalysisResponse(suggestions=suggestions, model=get_gpt_settings()["model"], usage_tokens=usage_tokens)
+
+

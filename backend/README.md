@@ -39,6 +39,11 @@ Make sure the extension `baseUrl` is `http://127.0.0.1:7788` (default in `sidepa
 - `GET /api/agent/stream?runId=...` — SSE stream of logs/status for a run.
 - `POST /api/analysis` — Send DOM + screenshots for GPT-5 analysis; returns suggestions.
 
+Also available:
+
+- `POST /api/summarize` — Return a concise summary of the page content.
+- `POST /api/suggest` — Return suggested UI actions for the page.
+
 #### New: Analysis API (DOM + screenshots)
 
 POST `/api/analysis`

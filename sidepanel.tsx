@@ -272,6 +272,67 @@ function SidePanel() {
     }
   }
 
+  const handleSummarize = async () => {
+    try {
+      appendLog("[summary] capturing page…")
+      const tab = await getActiveTab()
+      if (!tab?.id) throw new Error("No active tab")
+      const domHtml = await getDomHtml(tab.id)
+      const shot = await captureScreenshot()
+
+      const body = {
+        page_url: tab.url || null,
+        dom_html: domHtml,
+        screenshots: [
+          {
+            mime_type: shot.mime,
+            data_base64: shot.b64
+          }
+        ],
+        user_prompt: "Summarize the page content clearly and concisely."
+      }
+
+      appendLog("[summary] sending to backend…")
+      const res = await callApi("/api/summarize", body)
+      appendLog(`[summary] response: ${JSON.stringify(res)}`)
+      console.log("/api/summarize response", res)
+    } catch (e) {
+      appendLog(`[summary] error: ${String(e)}`)
+      console.error("/api/summarize failed", e)
+    }
+  }
+
+  const handleSuggest = async () => {
+    try {
+      appendLog("[suggest] capturing page…")
+      const tab = await getActiveTab()
+      if (!tab?.id) throw new Error("No active tab")
+      const domHtml = await getDomHtml(tab.id)
+      const shot = await captureScreenshot()
+
+      const body = {
+        page_url: tab.url || null,
+        dom_html: domHtml,
+        screenshots: [
+          {
+            mime_type: shot.mime,
+            data_base64: shot.b64
+          }
+        ],
+        user_prompt:
+          "Analyze the page and propose specific, safe UI actions with brief rationale."
+      }
+
+      appendLog("[suggest] sending to backend…")
+      const res = await callApi("/api/suggest", body)
+      appendLog(`[suggest] response: ${JSON.stringify(res)}`)
+      console.log("/api/suggest response", res)
+    } catch (e) {
+      appendLog(`[suggest] error: ${String(e)}`)
+      console.error("/api/suggest failed", e)
+    }
+  }
+
   return (
     <div
       style={{
@@ -357,7 +418,14 @@ function SidePanel() {
             resize: "vertical"
           }}
         />
-        <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+        {/* Row 1: Run controls */}
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 8,
+            marginTop: 10
+          }}>
           <button
             onClick={handleStop}
             disabled={!runId || status === "idle"}
@@ -367,7 +435,8 @@ function SidePanel() {
               borderRadius: 8,
               padding: "10px 14px",
               color: "#fff",
-              cursor: runId ? "pointer" : "not-allowed"
+              cursor: runId ? "pointer" : "not-allowed",
+              flex: "0 1 auto"
             }}>
             Stop
           </button>
@@ -381,7 +450,8 @@ function SidePanel() {
                 borderRadius: 8,
                 padding: "10px 14px",
                 color: "#fff",
-                cursor: runId ? "pointer" : "not-allowed"
+                cursor: runId ? "pointer" : "not-allowed",
+                flex: "0 1 auto"
               }}>
               Resume
             </button>
@@ -396,7 +466,8 @@ function SidePanel() {
                 padding: "10px 14px",
                 color: "#fff",
                 cursor:
-                  runId && status === "running" ? "pointer" : "not-allowed"
+                  runId && status === "running" ? "pointer" : "not-allowed",
+                flex: "0 1 auto"
               }}>
               Pause
             </button>
@@ -409,9 +480,45 @@ function SidePanel() {
               borderRadius: 8,
               padding: "10px 14px",
               color: "#e8eaed",
-              cursor: "pointer"
+              cursor: "pointer",
+              flex: "0 1 auto"
             }}>
             Clear
+          </button>
+        </div>
+        {/* Row 2: Analysis controls */}
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 8,
+            marginTop: 8
+          }}>
+          <button
+            onClick={handleSummarize}
+            style={{
+              background: "#0ea5e9",
+              border: "none",
+              borderRadius: 8,
+              padding: "10px 14px",
+              color: "#fff",
+              cursor: "pointer",
+              flex: "1 1 160px"
+            }}>
+            Summarize Page
+          </button>
+          <button
+            onClick={handleSuggest}
+            style={{
+              background: "#10b981",
+              border: "none",
+              borderRadius: 8,
+              padding: "10px 14px",
+              color: "#fff",
+              cursor: "pointer",
+              flex: "1 1 160px"
+            }}>
+            Suggest Actions
           </button>
           <button
             onClick={handleAnalyze}
@@ -421,10 +528,15 @@ function SidePanel() {
               borderRadius: 8,
               padding: "10px 14px",
               color: "#fff",
-              cursor: "pointer"
+              cursor: "pointer",
+              flex: "1 1 160px"
             }}>
             Analyze Page
           </button>
+        </div>
+        {/* Row 3: Submit */}
+        <div style={{ display: "flex", marginTop: 8 }}>
+          <div style={{ flex: 1 }} />
           <button
             onClick={handleSubmitTask}
             disabled={!taskText || status === "running"}
@@ -434,7 +546,6 @@ function SidePanel() {
               borderRadius: 8,
               padding: "10px 16px",
               color: "#fff",
-              marginLeft: "auto",
               cursor:
                 taskText && status !== "running" ? "pointer" : "not-allowed"
             }}>

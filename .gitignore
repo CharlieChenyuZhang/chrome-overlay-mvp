@@ -32,3 +32,11 @@ dist/
 
 # typescript
 .tsbuildinfo
+
+# python virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+**/.env

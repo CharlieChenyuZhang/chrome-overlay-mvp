@@ -383,7 +383,7 @@ async def analyze_page(req: AnalysisRequest) -> AnalysisResponse:
 # --------- Specialized endpoints: summarize and suggest ---------
 
 class SummaryResponse(BaseModel):
-    summary: str
+    summary: List[str]
     model: str
     usage_tokens: Optional[int] = None
 
@@ -395,11 +395,22 @@ async def run_responses_api(req: AnalysisRequest, mode: str) -> Dict[str, Any]:
     settings = get_gpt_settings()
 
     base_instruction = (
-        "Write a concise description of the page content that begins with 'This page contains'. Focus on factual information visible in the UI: key entities, values, labels, statuses, deadlines, totals, and noteworthy items. Use 1–3 sentences, present tense, neutral tone. Do not describe layout or visuals. Avoid jargon and do not mention DOM, HTML, or screenshots."
+        """Analyze this page and determine if it's a news source (news website, article, blog, etc.). 
+
+If it's a news source, extract each news story/article as a separate bullet point. Each bullet should be a complete news item with: headline, brief summary (1-2 sentences), and key details.
+
+EXAMPLES for news sources:
+• "Tech Giant Reports Record Q4 Earnings - Apple Inc. announced quarterly revenue of $123.9 billion, beating analyst expectations. The company's iPhone sales increased 8% year-over-year, driven by strong demand for the latest iPhone 15 models."
+
+• "Climate Summit Reaches Historic Agreement - World leaders at COP28 have agreed to phase out fossil fuels by 2050. The deal includes $100 billion in climate financing for developing nations and sets new emissions targets for major economies."
+
+• "Local Hospital Expands Emergency Services - City General Hospital opened a new 24-bed emergency wing to address growing patient demand. The expansion includes state-of-the-art trauma facilities and will create 50 new healthcare jobs."
+
+If it's NOT a news source, write a concise description of the page content that begins with 'This page contains'. Focus on factual information visible in the UI: key entities, values, labels, statuses, deadlines, totals, and noteworthy items. Use present tense, neutral tone. Do not describe layout or visuals. Avoid jargon and do not mention DOM, HTML, or screenshots."""
         if mode == "summary"
         else (
             "Identify the main activity on this page and propose the next concrete actions that I, the AI assistant, can take to move it forward. Prioritize high-impact, assistant-executable steps. If the context is a message/email/chat composer or reply view, include a concise draft reply. Keep suggestions specific and safe; avoid low-value navigation tips. Write in paragraphs rather than bullet points."
-            "\n\nSTRICT FORMAT:\nReasoning: 2–4 sentences describing what I will do next (assistant actions only; no meta commentary).\nContent: a short, well-formed paragraph with the drafted reply email/message if applicable; otherwise 'n/a'."
+            "\n\nSTRICT FORMAT:\nReasoning: 2–4 sentences describing how I can help you next (assistant actions only; no meta commentary).\nContent: a short, well-formed paragraph with the drafted reply email/message if applicable; otherwise 'n/a'."
         )
     )
     # Build text
@@ -461,7 +472,40 @@ def extract_output_text(data: Dict[str, Any]) -> tuple[str, Optional[int]]:
 async def summarize_page(req: AnalysisRequest) -> SummaryResponse:
     data = await run_responses_api(req, mode="summary")
     text, usage_tokens = extract_output_text(data)
-    return SummaryResponse(summary=text, model=get_gpt_settings()["model"], usage_tokens=usage_tokens)
+    # Split summary text into list items. Prefer bullet/line splits, fallback to sentences.
+    items: List[str] = []
+    raw_lines = [l.strip() for l in (text or "").splitlines()]
+    for raw in raw_lines:
+        if not raw:
+            continue
+        # Split by common bullet separators within a line
+        parts = [p.strip() for p in raw.split("•")]
+        for p in parts:
+            if not p:
+                continue
+            items.append(p.lstrip("-• \t"))
+    # If still empty, fall back to splitting sentences.
+    if not items:
+        # naive sentence split on period/question/exclamation
+        buf = []
+        s = (text or "").strip()
+        cur = ""
+        for ch in s:
+            cur += ch
+            if ch in ".!?":
+                part = cur.strip()
+                if part:
+                    buf.append(part)
+                cur = ""
+        tail = cur.strip()
+        if tail:
+            buf.append(tail)
+        items = [b for b in (x.strip() for x in buf) if b]
+    # Normalize and cap list size
+    items = [i.strip().rstrip("-• ") for i in items]
+    items = [i for i in items if i]
+    items = items[:10]
+    return SummaryResponse(summary=items, model=get_gpt_settings()["model"], usage_tokens=usage_tokens)
 
 
 def parse_reasoning_and_content(text: str) -> tuple[str, str]:

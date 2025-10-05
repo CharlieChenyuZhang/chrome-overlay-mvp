@@ -287,24 +287,12 @@ export function Overlay({ onClose }: { onClose: () => void }) {
   )
 
   // --- Backend integration for on-page summarize/suggest (cards 2 & 3) ---
-  const [summaryText, setSummaryText] = React.useState<string>("")
+  const [summaryItems, setSummaryItems] = React.useState<string[]>([])
   const [suggestText, setSuggestText] = React.useState<string>("")
   const [isSummarizing, setIsSummarizing] = React.useState(false)
   const [isSuggesting, setIsSuggesting] = React.useState(false)
 
-  // Normalize summary to avoid duplicating the leading phrase in the UI
-  const normalizedSummary = React.useMemo(() => {
-    const raw = (summaryText || "").trim()
-    const startsWithPhrase = /^\s*this page contains/i.test(raw)
-    const stripped = startsWithPhrase
-      ? raw.replace(/^\s*this page contains[\s\-:,.]*?/i, "").trimStart()
-      : raw
-    return {
-      startsWithPhrase,
-      heading: "This page contains",
-      body: stripped.length > 0 ? stripped : raw
-    }
-  }, [summaryText])
+  const summaryHeading = "This page contains"
   const [suggestContent, setSuggestContent] = React.useState<string>("")
   const [apiBaseUrl, setApiBaseUrl] = React.useState<string>(
     "http://127.0.0.1:7788"
@@ -355,7 +343,7 @@ export function Overlay({ onClose }: { onClose: () => void }) {
   const handleSummarizeClick = React.useCallback(async () => {
     try {
       setIsSummarizing(true)
-      setSummaryText("")
+      setSummaryItems([])
       const domHtml = getDomHtml()
       const body = {
         page_url: location?.href || null,
@@ -363,10 +351,27 @@ export function Overlay({ onClose }: { onClose: () => void }) {
         screenshots: []
       }
       const res = await callApi("/api/summarize", body)
-      const text = String(res?.summary || "")
-      setSummaryText(text)
+      let items: string[] = []
+      if (Array.isArray(res?.summary)) {
+        items = res.summary
+          .filter((x: any) => typeof x === "string")
+          .map((s: string) => s.trim())
+          .filter(Boolean)
+      } else if (typeof res?.summary === "string") {
+        const raw = String(res.summary)
+        const lines = raw
+          .split(/\r?\n/)
+          .map((l) => l.trim())
+          .filter(Boolean)
+        items = lines.length > 0 ? lines : [raw.trim()].filter(Boolean)
+      }
+      // Remove any leading "This page contains" phrase from each item
+      items = items.map((i) =>
+        i.replace(/^\s*this page contains[\s\-:,.]*?/i, "").trim()
+      )
+      setSummaryItems(items)
     } catch (e: any) {
-      setSummaryText(`Error: ${e?.message || String(e)}`)
+      setSummaryItems([`Error: ${e?.message || String(e)}`])
     } finally {
       setIsSummarizing(false)
     }
@@ -979,11 +984,9 @@ export function Overlay({ onClose }: { onClose: () => void }) {
                 ) : null}
               </div>
               <div className="project-description-wrapper more-padding">
-                {summaryText ? (
+                {summaryItems.length > 0 ? (
                   <>
-                    <h4 className="center-aligned black">
-                      {normalizedSummary.heading}
-                    </h4>
+                    <h4 className="center-aligned black">{summaryHeading}</h4>
                     <div
                       style={{
                         marginTop: 8,
@@ -992,9 +995,15 @@ export function Overlay({ onClose }: { onClose: () => void }) {
                         border: "1px solid rgba(20,18,13,0.12)",
                         borderRadius: 8,
                         padding: 10,
-                        whiteSpace: "pre-wrap"
+                        whiteSpace: "normal"
                       }}>
-                      {normalizedSummary.body}
+                      <ul style={{ paddingLeft: 18, margin: 0 }}>
+                        {summaryItems.map((item, idx) => (
+                          <li key={idx} style={{ marginBottom: 4 }}>
+                            {item}
+                          </li>
+                        ))}
+                      </ul>
                     </div>
                   </>
                 ) : (

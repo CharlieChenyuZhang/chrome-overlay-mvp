@@ -10,6 +10,8 @@ function SidePanel() {
   const [logs, setLogs] = useState<string[]>([])
   const [baseUrl, setBaseUrl] = useState<string>("http://127.0.0.1:7788")
   const [llmInfo, setLlmInfo] = useState<string>("LLM: OpenAI (default)")
+  const [suggestReasoning, setSuggestReasoning] = useState<string>("")
+  const [suggestContent, setSuggestContent] = useState<string>("")
   const [token, setToken] = useState<string | null>(null)
   const eventSourceRef = useRef<EventSource | null>(null)
 
@@ -224,7 +226,23 @@ function SidePanel() {
   const getDomHtml = async (tabId: number): Promise<string> => {
     const [{ result }] = await chrome.scripting.executeScript({
       target: { tabId },
-      func: () => document.documentElement.outerHTML
+      func: () => {
+        try {
+          const raw =
+            document.body?.innerText ||
+            document.documentElement?.innerText ||
+            ""
+          // Normalize whitespace while keeping basic line structure
+          return raw
+            .replace(/\u00A0/g, " ")
+            .replace(/[\t\r\f]+/g, " ")
+            .replace(/\s*\n\s*/g, "\n")
+            .replace(/\n{3,}/g, "\n\n")
+            .trim()
+        } catch {
+          return ""
+        }
+      }
     })
     return String(result || "")
   }
@@ -325,8 +343,39 @@ function SidePanel() {
 
       appendLog("[suggest] sending to backend…")
       const res = await callApi("/api/suggest", body)
-      appendLog(`[suggest] response: ${JSON.stringify(res)}`)
-      console.log("/api/suggest response", res)
+      try {
+        let reasoning: string = ""
+        if (typeof res?.reasoning === "string") {
+          reasoning = res.reasoning
+        } else if (Array.isArray(res?.reasoning)) {
+          reasoning = res.reasoning
+            .filter((x: any) => typeof x === "string")
+            .join(" ")
+        }
+        const content: string =
+          typeof res?.content === "string" ? res.content : "n/a"
+        setSuggestReasoning(reasoning)
+        setSuggestContent(content)
+        const pretty = JSON.stringify(
+          {
+            reasoning,
+            content,
+            model: res?.model,
+            usage_tokens: res?.usage_tokens
+          },
+          null,
+          2
+        )
+        appendLog(`[suggest] response: ${pretty}`)
+        console.log("/api/suggest response", {
+          reasoning,
+          content,
+          model: res?.model,
+          usage_tokens: res?.usage_tokens
+        })
+      } catch (parseErr) {
+        appendLog(`[suggest] parse error: ${String(parseErr)}`)
+      }
     } catch (e) {
       appendLog(`[suggest] error: ${String(e)}`)
       console.error("/api/suggest failed", e)
@@ -574,6 +623,26 @@ function SidePanel() {
           ) : (
             logs.map((l, i) => <div key={i}>{l}</div>)
           )}
+          {(suggestReasoning && suggestReasoning.trim().length > 0) ||
+          suggestContent ? (
+            <div style={{ marginTop: 10 }}>
+              <div style={{ fontWeight: 600, marginBottom: 6 }}>Reasoning</div>
+              <p style={{ margin: "0 0 10px 0" }}>
+                {suggestReasoning && suggestReasoning.trim()
+                  ? suggestReasoning
+                  : "(No suggestions)"}
+              </p>
+              <div style={{ fontWeight: 600, marginBottom: 6 }}>Content</div>
+              <pre
+                style={{
+                  margin: 0,
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-word"
+                }}>
+                {suggestContent || "n/a"}
+              </pre>
+            </div>
+          ) : null}
         </div>
         <div style={{ marginTop: 12, display: "flex", gap: 8 }}>
           <input

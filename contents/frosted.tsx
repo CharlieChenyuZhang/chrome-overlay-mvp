@@ -1,7 +1,7 @@
+import { animate } from "motion"
 import type { PlasmoCSConfig } from "plasmo"
 import React, { useEffect } from "react"
 import { createRoot, type Root } from "react-dom/client"
-import { animate } from "motion"
 
 export const config: PlasmoCSConfig = {
   matches: ["<all_urls>"],
@@ -225,6 +225,10 @@ const styles = `
 .record-error { margin-top: 4px; color: #d70015; font-size: clamp(11px, 1.05vw, 16px); text-align: center; }
 .transcribing-indicator { display: flex; align-items: center; gap: clamp(8px, 1vw, 16px); color: #3d3a30; font-size: clamp(12px, 1.2vw, 18px); }
 .spinner { width: clamp(14px, 1.6vw, 20px); height: clamp(14px, 1.6vw, 20px); border: 3px solid rgba(11, 87, 208, 0.2); border-top-color: #0b57d0; border-radius: 50%; animation: spinner-rotate 0.9s linear infinite; }
+/* Apple-style subtle spinner for card overlays */
+.spinner-apple { position: relative; width: 28px; height: 28px; display: inline-block; }
+.spinner-apple::before { content: ""; position: absolute; inset: 0; border-radius: 50%; box-sizing: border-box; background: conic-gradient(from 0deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.9) 20%, rgba(255,255,255,0) 100%); -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px)); mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px)); filter: drop-shadow(0 0 6px rgba(255,255,255,0.45)); animation: spinner-rotate 0.8s linear infinite; }
+.spinner-apple::after { content: ""; position: absolute; inset: 6px; border-radius: 50%; background: rgba(255,255,255,0.06); }
 .transcription-box { width: 100%; text-align: left; color: #121111; font-size: clamp(12px, 1.2vw, 18px); line-height: 1.6; background: rgba(254, 255, 217, 0.7); border-radius: 10px; padding: clamp(14px, 1.8vw, 24px); border: 1px solid rgba(20, 18, 13, 0.12); box-shadow: inset 0 1px 3px rgba(20, 18, 13, 0.12); white-space: pre-wrap; word-break: break-word; }
 .volume-visualizer { width: 100%; height: clamp(54px, 6.5vw, 110px); display: flex; align-items: center; gap: clamp(3px, 0.5vw, 6px); padding: clamp(10px, 1.2vw, 14px) clamp(8px, 1vw, 12px); border-radius: 14px; background: linear-gradient(180deg, rgba(255, 255, 255, 0.75) 0%, rgba(254, 255, 217, 0.55) 100%); border: 1px solid rgba(11, 87, 208, 0.2); box-shadow: inset 0 1px 6px rgba(11, 87, 208, 0.15), 0 8px 18px rgba(11, 87, 208, 0.12); transition: opacity 0.25s ease, transform 0.25s ease; }
 .volume-bar { flex: 1; height: 100%; border-radius: 999px; background: linear-gradient(180deg, rgba(11, 87, 208, 0.95) 0%, rgba(11, 87, 208, 0.45) 100%); box-shadow: 0 4px 10px rgba(11, 87, 208, 0.18); transform-origin: center; transition: transform 0.12s ease-out, opacity 0.25s ease; }
@@ -249,7 +253,9 @@ export function Overlay({ onClose }: { onClose: () => void }) {
   const [audioUrl, setAudioUrl] = React.useState<string | null>(null)
   const [isTranscribing, setIsTranscribing] = React.useState(false)
   const [transcription, setTranscription] = React.useState<string | null>(null)
-  const [transcribeError, setTranscribeError] = React.useState<string | null>(null)
+  const [transcribeError, setTranscribeError] = React.useState<string | null>(
+    null
+  )
   const [cardWidthRatio, setCardWidthRatio] = React.useState(0.5)
   const [volumeLevels, setVolumeLevels] = React.useState<number[]>(() =>
     Array.from({ length: VOLUME_BAR_COUNT }, () => 0)
@@ -268,7 +274,9 @@ export function Overlay({ onClose }: { onClose: () => void }) {
   const dataArrayRef = React.useRef<Uint8Array | null>(null)
   const volumeRafRef = React.useRef<number | null>(null)
   const streamSourceRef = React.useRef<MediaStreamAudioSourceNode | null>(null)
-  const openaiApiKey = process.env.PLASMO_PUBLIC_OPENAI_KEY as string | undefined
+  const openaiApiKey = process.env.PLASMO_PUBLIC_OPENAI_KEY as
+    | string
+    | undefined
   const cardSizeOptions = React.useMemo(
     () => [
       { label: "S", value: 0.3, percent: "30%" },
@@ -277,6 +285,125 @@ export function Overlay({ onClose }: { onClose: () => void }) {
     ],
     []
   )
+
+  // --- Backend integration for on-page summarize/suggest (cards 2 & 3) ---
+  const [summaryText, setSummaryText] = React.useState<string>("")
+  const [suggestText, setSuggestText] = React.useState<string>("")
+  const [isSummarizing, setIsSummarizing] = React.useState(false)
+  const [isSuggesting, setIsSuggesting] = React.useState(false)
+
+  // Normalize summary to avoid duplicating the leading phrase in the UI
+  const normalizedSummary = React.useMemo(() => {
+    const raw = (summaryText || "").trim()
+    const startsWithPhrase = /^\s*this page contains/i.test(raw)
+    const stripped = startsWithPhrase
+      ? raw.replace(/^\s*this page contains[\s\-:,.]*?/i, "").trimStart()
+      : raw
+    return {
+      startsWithPhrase,
+      heading: "This page contains",
+      body: stripped.length > 0 ? stripped : raw
+    }
+  }, [summaryText])
+  const [suggestContent, setSuggestContent] = React.useState<string>("")
+  const [apiBaseUrl, setApiBaseUrl] = React.useState<string>(
+    "http://127.0.0.1:7788"
+  )
+  const [apiToken, setApiToken] = React.useState<string | null>(null)
+
+  React.useEffect(() => {
+    try {
+      chrome.storage?.local?.get(["apiBaseUrl", "apiToken"], (res) => {
+        if (res?.apiBaseUrl) setApiBaseUrl(res.apiBaseUrl)
+        if (res?.apiToken) setApiToken(res.apiToken)
+      })
+    } catch {}
+  }, [])
+
+  const callApi = React.useCallback(
+    async (path: string, body: unknown) => {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json"
+      }
+      if (apiToken) headers["Authorization"] = `Bearer ${apiToken}`
+      const res = await fetch(`${apiBaseUrl}${path}`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body)
+      })
+      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+      return (await res.json()) as any
+    },
+    [apiBaseUrl, apiToken]
+  )
+
+  const getDomHtml = React.useCallback((): string => {
+    try {
+      const raw =
+        document.body?.innerText || document.documentElement?.innerText || ""
+      return raw
+        .replace(/\u00A0/g, " ")
+        .replace(/[\t\r\f]+/g, " ")
+        .replace(/\s*\n\s*/g, "\n")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim()
+    } catch {
+      return ""
+    }
+  }, [])
+
+  const handleSummarizeClick = React.useCallback(async () => {
+    try {
+      setIsSummarizing(true)
+      setSummaryText("")
+      const domHtml = getDomHtml()
+      const body = {
+        page_url: location?.href || null,
+        dom_html: domHtml,
+        screenshots: []
+      }
+      const res = await callApi("/api/summarize", body)
+      const text = String(res?.summary || "")
+      setSummaryText(text)
+    } catch (e: any) {
+      setSummaryText(`Error: ${e?.message || String(e)}`)
+    } finally {
+      setIsSummarizing(false)
+    }
+  }, [callApi, getDomHtml])
+
+  const handleSuggestClick = React.useCallback(async () => {
+    try {
+      setIsSuggesting(true)
+      setSuggestText("")
+      setSuggestContent("")
+      const domHtml = getDomHtml()
+      const body = {
+        page_url: location?.href || null,
+        dom_html: domHtml,
+        screenshots: []
+      }
+      const res = await callApi("/api/suggest", body)
+      console.log("res", res)
+      let reasoning: string = ""
+      if (typeof res?.reasoning === "string") {
+        reasoning = res.reasoning
+      } else if (Array.isArray(res?.reasoning)) {
+        reasoning = res.reasoning
+          .filter((x: any) => typeof x === "string")
+          .join(" ")
+      }
+      const content: string =
+        typeof res?.content === "string" ? res.content : "n/a"
+      setSuggestContent(content)
+      const text = reasoning
+      setSuggestText(text || "(No suggestions)")
+    } catch (e: any) {
+      setSuggestText(`Error: ${e?.message || String(e)}`)
+    } finally {
+      setIsSuggesting(false)
+    }
+  }, [callApi, getDomHtml])
 
   const stopVolumeMeter = React.useCallback(() => {
     if (volumeRafRef.current) {
@@ -298,7 +425,10 @@ export function Overlay({ onClose }: { onClose: () => void }) {
     }
     audioContextRef.current = null
     dataArrayRef.current = null
-    previousLevelsRef.current = Array.from({ length: VOLUME_BAR_COUNT }, () => 0)
+    previousLevelsRef.current = Array.from(
+      { length: VOLUME_BAR_COUNT },
+      () => 0
+    )
     setVolumeLevels(Array.from({ length: VOLUME_BAR_COUNT }, () => 0))
   }, [])
 
@@ -306,7 +436,8 @@ export function Overlay({ onClose }: { onClose: () => void }) {
     async (stream: MediaStream) => {
       try {
         stopVolumeMeter()
-        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext
+        const AudioCtx =
+          window.AudioContext || (window as any).webkitAudioContext
         if (!AudioCtx) {
           return
         }
@@ -327,7 +458,9 @@ export function Overlay({ onClose }: { onClose: () => void }) {
         analyser.smoothingTimeConstant = 0.65
         analyserRef.current = analyser
         const bufferLength = analyser.fftSize
-        const dataArray = new Uint8Array(bufferLength)
+        const dataArray: Uint8Array = new (Uint8Array as unknown as {
+          new (length: number): Uint8Array
+        })(bufferLength as number)
         dataArrayRef.current = dataArray
 
         source.connect(analyser)
@@ -339,13 +472,20 @@ export function Overlay({ onClose }: { onClose: () => void }) {
           if (!analyserRef.current || !dataArrayRef.current) {
             return
           }
-          analyserRef.current.getByteTimeDomainData(dataArrayRef.current)
-          const segmentSize = Math.max(1, Math.floor(dataArrayRef.current.length / barCount))
+          analyserRef.current.getByteTimeDomainData(dataArrayRef.current as any)
+          const segmentSize = Math.max(
+            1,
+            Math.floor(dataArrayRef.current.length / barCount)
+          )
           const nextLevels: number[] = []
           for (let i = 0; i < barCount; i++) {
             const start = i * segmentSize
             let sumSquares = 0
-            for (let j = 0; j < segmentSize && start + j < dataArrayRef.current.length; j++) {
+            for (
+              let j = 0;
+              j < segmentSize && start + j < dataArrayRef.current.length;
+              j++
+            ) {
               const sample = dataArrayRef.current[start + j] - 128
               sumSquares += sample * sample
             }
@@ -377,7 +517,9 @@ export function Overlay({ onClose }: { onClose: () => void }) {
       }
 
       if (!openaiApiKey) {
-        setTranscribeError("Please configure the OpenAI API key before transcribing.")
+        setTranscribeError(
+          "Please configure the OpenAI API key before transcribing."
+        )
         return
       }
 
@@ -403,7 +545,8 @@ export function Overlay({ onClose }: { onClose: () => void }) {
         if (!response.ok) {
           const errorBody = await response.json().catch(() => null)
           const message =
-            errorBody?.error?.message || "Transcription failed, please try again later."
+            errorBody?.error?.message ||
+            "Transcription failed, please try again later."
           throw new Error(message)
         }
 
@@ -414,7 +557,9 @@ export function Overlay({ onClose }: { onClose: () => void }) {
       } catch (error: any) {
         if (!isMountedRef.current || transcribeJobRef.current !== jobId) return
         console.warn("Transcription failed", error)
-        setTranscribeError(error?.message || "Transcription failed, please try again later.")
+        setTranscribeError(
+          error?.message || "Transcription failed, please try again later."
+        )
       } finally {
         if (isMountedRef.current && transcribeJobRef.current === jobId) {
           setIsTranscribing(false)
@@ -489,7 +634,9 @@ export function Overlay({ onClose }: { onClose: () => void }) {
         if (!isMountedRef.current) {
           return
         }
-        setRecordError("Something went wrong while recording, please try again.")
+        setRecordError(
+          "Something went wrong while recording, please try again."
+        )
         setIsRecording(false)
       }
 
@@ -535,7 +682,9 @@ export function Overlay({ onClose }: { onClose: () => void }) {
         return
       }
       stopVolumeMeter()
-      setRecordError("Unable to start recording. Please check microphone permissions.")
+      setRecordError(
+        "Unable to start recording. Please check microphone permissions."
+      )
       setIsRecording(false)
     }
   }, [startVolumeMeter, stopVolumeMeter, transcribeAudio, updateAudioUrl])
@@ -635,12 +784,13 @@ export function Overlay({ onClose }: { onClose: () => void }) {
             `circle(${maxR}px at ${x}px ${y}px)`
           ],
           "--blur": ["0px", "8px"],
-          backgroundColor: [
-            "rgba(11, 87, 208, 0.20)",
-            "rgba(20, 18, 13, 0.22)"
-          ]
+          backgroundColor: ["rgba(11, 87, 208, 0.20)", "rgba(20, 18, 13, 0.22)"]
         } as any,
-        { duration: 0.6, easing: "cubic-bezier(0.22, 1, 0.36, 1)", fill: "forwards" } as any
+        {
+          duration: 0.6,
+          easing: "cubic-bezier(0.22, 1, 0.36, 1)",
+          fill: "forwards"
+        } as any
       )
     }
 
@@ -669,7 +819,12 @@ export function Overlay({ onClose }: { onClose: () => void }) {
             `rotate(${finalRotate}deg) translateY(0px)`
           ]
         } as any,
-        { duration: 0.6, delay: i * 0.06, easing: "cubic-bezier(0.22, 1, 0.36, 1)", fill: "forwards" } as any
+        {
+          duration: 0.6,
+          delay: i * 0.06,
+          easing: "cubic-bezier(0.22, 1, 0.36, 1)",
+          fill: "forwards"
+        } as any
       )
     })
   }, [])
@@ -677,23 +832,24 @@ export function Overlay({ onClose }: { onClose: () => void }) {
   return (
     <>
       <style>{styles}</style>
-      <section className="overlay" role="dialog" aria-modal="true" ref={overlayRef}>
-
+      <section
+        className="overlay"
+        role="dialog"
+        aria-modal="true"
+        ref={overlayRef}>
         {/* Scrollable project list */}
         <div className="portfolio-section">
           <div
             className="image-overlay-wrap portfolio"
             ref={listRef}
-            style={{ ["--card-width" as any]: `${cardWidthRatio * 100}vw` }}
-          >
+            style={{ ["--card-width" as any]: `${cardWidthRatio * 100}vw` }}>
             <div
               className="project-wrapped record-card"
               role="button"
               tabIndex={0}
               onClick={handleRecordCardClick}
               onKeyDown={handleRecordCardKeyDown}
-              aria-pressed={isRecording}
-            >
+              aria-pressed={isRecording}>
               <div className="project-cover-wrapper recorder">
                 <div className="recording-panel">
                   <div className="recording-status">
@@ -705,24 +861,25 @@ export function Overlay({ onClose }: { onClose: () => void }) {
                       {isRecording
                         ? "Recording… click to stop"
                         : isTranscribing
-                        ? "Processing audio… please wait"
-                        : audioUrl
-                        ? "Recording saved, click to record again"
-                        : "Click to start recording"}
+                          ? "Processing audio… please wait"
+                          : audioUrl
+                            ? "Recording saved, click to record again"
+                            : "Click to start recording"}
                     </span>
                   </div>
                   <div
                     className={`volume-visualizer${!isRecording ? " idle" : ""}`}
                     style={{ ["--volume-bars" as any]: volumeLevels.length }}
-                    aria-hidden="true"
-                  >
+                    aria-hidden="true">
                     {volumeLevels.map((level, index) => {
                       const adjusted = Math.max(0.1, Math.pow(level, 0.8))
                       return (
                         <span
                           key={index}
                           className={`volume-bar${level < 0.05 ? " muted" : ""}`}
-                          style={{ transform: `scaleY(${Math.min(1, adjusted)})` }}
+                          style={{
+                            transform: `scaleY(${Math.min(1, adjusted)})`
+                          }}
                         />
                       )
                     })}
@@ -731,10 +888,10 @@ export function Overlay({ onClose }: { onClose: () => void }) {
                     {isRecording
                       ? "Audio is being captured—click again when you're done."
                       : isTranscribing
-                      ? "Uploading and sending to OpenAI for transcription. Please keep this window open."
-                      : audioUrl
-                      ? "Recording saved—you can play it back or capture a new one."
-                      : "The first click will request microphone access and start recording immediately."}
+                        ? "Uploading and sending to OpenAI for transcription. Please keep this window open."
+                        : audioUrl
+                          ? "Recording saved—you can play it back or capture a new one."
+                          : "The first click will request microphone access and start recording immediately."}
                   </p>
                 </div>
               </div>
@@ -745,8 +902,8 @@ export function Overlay({ onClose }: { onClose: () => void }) {
                     ? isTranscribing
                       ? "Recording saved—transcribing now."
                       : transcription
-                      ? "Transcription below. Record again to update it."
-                      : "Recording finished—use the player to listen back."
+                        ? "Transcription below. Record again to update it."
+                        : "Recording finished—use the player to listen back."
                     : "Click the card to start recording; playback and transcription will appear here."}
                 </h2>
                 {recordError ? (
@@ -777,51 +934,190 @@ export function Overlay({ onClose }: { onClose: () => void }) {
                     <span>Transcribing audio…</span>
                   </div>
                 ) : transcription ? (
-                  <div className="transcription-box">
-                    {transcription}
-                  </div>
+                  <div className="transcription-box">{transcription}</div>
                 ) : null}
               </div>
             </div>
-            <a
-              href="#"
-              className="project-wrapped w-inline-block"
-            >
+
+            <a href="#" className="project-wrapped r w-inline-block">
+              <div
+                className="project-cover-wrapper kori"
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  void handleSummarizeClick()
+                }}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    void handleSummarizeClick()
+                  }
+                }}
+                style={{
+                  cursor: isSummarizing ? "progress" : "pointer",
+                  position: "relative"
+                }}>
+                <div className="stretched">
+                  <img src={slide2} alt="Creative Project 2" loading="lazy" />
+                </div>
+                {isSummarizing ? (
+                  <div
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      background:
+                        "linear-gradient(180deg, rgba(0,0,0,0.18), rgba(0,0,0,0.28))",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center"
+                    }}>
+                    <span className="spinner-apple" aria-label="Loading" />
+                  </div>
+                ) : null}
+              </div>
+              <div className="project-description-wrapper more-padding">
+                {summaryText ? (
+                  <>
+                    <h4 className="center-aligned black">
+                      {normalizedSummary.heading}
+                    </h4>
+                    <div
+                      style={{
+                        marginTop: 8,
+                        color: "#121111",
+                        background: "rgba(254,255,217,0.7)",
+                        border: "1px solid rgba(20,18,13,0.12)",
+                        borderRadius: 8,
+                        padding: 10,
+                        whiteSpace: "pre-wrap"
+                      }}>
+                      {normalizedSummary.body}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <h4 className="center-aligned black">Page Summary</h4>
+                    <h2 className="smaller black">
+                      Click the image above to summarize this page. We'll
+                      extract the key information.
+                    </h2>
+                  </>
+                )}
+              </div>
+            </a>
+
+            <a href="#" className="project-wrapped w-inline-block">
+              <div
+                className="project-cover-wrapper kiarra"
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  void handleSuggestClick()
+                }}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    void handleSuggestClick()
+                  }
+                }}
+                style={{
+                  cursor: isSuggesting ? "progress" : "pointer",
+                  position: "relative"
+                }}>
+                <div className="stretched">
+                  <img src={slide3} alt="Creative Project 3" loading="lazy" />
+                </div>
+                {isSuggesting ? (
+                  <div
+                    style={{
+                      position: "absolute",
+                      inset: 0,
+                      background:
+                        "linear-gradient(180deg, rgba(0,0,0,0.18), rgba(0,0,0,0.28))",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center"
+                    }}>
+                    <span className="spinner-apple" aria-label="Loading" />
+                  </div>
+                ) : null}
+              </div>
+              <div className="project-description-wrapper more-padding">
+                {suggestText ? (
+                  <>
+                    <h4 className="center-aligned black">Suggested Actions</h4>
+                    <div
+                      style={{
+                        marginTop: 8,
+                        color: "#121111",
+                        background: "rgba(254,255,217,0.7)",
+                        border: "1px solid rgba(20,18,13,0.12)",
+                        borderRadius: 8,
+                        padding: 10
+                      }}>
+                      <p style={{ margin: 0, whiteSpace: "pre-wrap" }}>
+                        {suggestText && suggestText.trim()
+                          ? suggestText
+                          : "(No suggestions)"}
+                      </p>
+                    </div>
+                    <div
+                      style={{
+                        marginTop: 10,
+                        color: "#121111",
+                        background: "rgba(254,255,217,0.7)",
+                        border: "1px solid rgba(20,18,13,0.12)",
+                        borderRadius: 8,
+                        padding: 10
+                      }}>
+                      <h4
+                        className="center-aligned black"
+                        style={{ marginBottom: 8 }}>
+                        Suggested Content
+                      </h4>
+                      <div style={{ whiteSpace: "pre-wrap" }}>
+                        {suggestContent && suggestContent !== "n/a"
+                          ? suggestContent
+                          : "n/a"}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <h4 className="center-aligned black">Suggested Actions</h4>
+                    <h2 className="smaller black">
+                      Click the image above to get next-step suggestions focused
+                      on the primary task.
+                    </h2>
+                    <div className="service-tags">
+                      Prioritizes high‑impact steps
+                    </div>
+                  </>
+                )}
+              </div>
+            </a>
+
+            <a href="#" className="project-wrapped w-inline-block">
               <div className="project-cover-wrapper gh">
                 <div className="stretched">
                   <img src={slide1} alt="Creative Project 1" loading="lazy" />
                 </div>
               </div>
               <div className="project-description-wrapper more-padding">
-                <h4 className="center-aligned black">Gesture Home • Chair Company</h4>
-                <h2 className="smaller black">Repositioning chairs as heirloom pieces with influence on everyday comfort.</h2>
+                <h4 className="center-aligned black">
+                  Gesture Home • Chair Company
+                </h4>
+                <h2 className="smaller black">
+                  Repositioning chairs as heirloom pieces with influence on
+                  everyday comfort.
+                </h2>
                 <div className="service-tags">Branding</div>
-              </div>
-            </a>
-
-            <a href="#" className="project-wrapped r w-inline-block">
-              <div className="project-cover-wrapper kori">
-                <div className="stretched">
-                  <img src={slide2} alt="Creative Project 2" loading="lazy" />
-                </div>
-              </div>
-              <div className="project-description-wrapper more-padding">
-                <h4 className="center-aligned black">Kori Whitby • Copywriter</h4>
-                <h2 className="smaller black">Blending the powers of creative thinking and technology to revolutionise a copywriter's brand presence.</h2>
-                <div className="service-tags">Branding via Design Intensive<br/>Web design<br/>Web build</div>
-              </div>
-            </a>
-
-            <a href="#" className="project-wrapped w-inline-block">
-              <div className="project-cover-wrapper kiarra">
-                <div className="stretched">
-                  <img src={slide3} alt="Creative Project 3" loading="lazy" />
-                </div>
-              </div>
-              <div className="project-description-wrapper more-padding">
-                <h4 className="center-aligned black">Kiarra Soleil • Social Media Manager</h4>
-                <h2 className="smaller black">Drawing on the iconic 60s to revive a social media manager's brand in a feel-good way.</h2>
-                <div className="service-tags">Branding via Design Intensive</div>
               </div>
             </a>
 
@@ -833,7 +1129,9 @@ export function Overlay({ onClose }: { onClose: () => void }) {
               </div>
               <div className="project-description-wrapper more-padding">
                 <h4 className="center-aligned black">Hommage • Book Shop</h4>
-                <h2 className="smaller black">Bringing the appeal of physical books into the modern world.</h2>
+                <h2 className="smaller black">
+                  Bringing the appeal of physical books into the modern world.
+                </h2>
                 <div className="service-tags">Branding</div>
               </div>
             </a>
@@ -845,9 +1143,19 @@ export function Overlay({ onClose }: { onClose: () => void }) {
                 </div>
               </div>
               <div className="project-description-wrapper more-padding">
-                <h4 className="center-aligned black">Agents by Brooke • Agent Referral Agency</h4>
-                <h2 className="smaller black">Revolutionising a sketchy industry with a trustworthy brand.</h2>
-                <div className="service-tags">Branding<br/>Web design<br/>Web build</div>
+                <h4 className="center-aligned black">
+                  Agents by Brooke • Agent Referral Agency
+                </h4>
+                <h2 className="smaller black">
+                  Revolutionising a sketchy industry with a trustworthy brand.
+                </h2>
+                <div className="service-tags">
+                  Branding
+                  <br />
+                  Web design
+                  <br />
+                  Web build
+                </div>
               </div>
             </a>
 
@@ -858,9 +1166,16 @@ export function Overlay({ onClose }: { onClose: () => void }) {
                 </div>
               </div>
               <div className="project-description-wrapper more-padding">
-                <h4 className="center-aligned black">Scale Your Socials • Social Media Agency</h4>
-                <h2 className="smaller black">Fusing the styles of the past and future for a visionary agency.</h2>
-                <div className="service-tags">Branding via Design Intensive</div>
+                <h4 className="center-aligned black">
+                  Scale Your Socials • Social Media Agency
+                </h4>
+                <h2 className="smaller black">
+                  Fusing the styles of the past and future for a visionary
+                  agency.
+                </h2>
+                <div className="service-tags">
+                  Branding via Design Intensive
+                </div>
               </div>
             </a>
 
@@ -872,28 +1187,48 @@ export function Overlay({ onClose }: { onClose: () => void }) {
               </div>
               <div className="project-description-wrapper more-padding">
                 <h4 className="center-aligned black">Aura • Perfume</h4>
-                <h2 className="smaller black">Redefining the standard for (unisex) perfume.</h2>
+                <h2 className="smaller black">
+                  Redefining the standard for (unisex) perfume.
+                </h2>
                 <div className="service-tags">Branding</div>
               </div>
             </a>
 
             <div className="project-wrapped r">
-              <div className="project-cover-wrapper" style={{ backgroundColor: "#f5f2ed", border: "2px dashed #ccc", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                <div style={{ textAlign: "center", color: "#666", fontSize: 14 }}>
-                  <h4 style={{ color: "#333", marginBottom: 10 }}>[SPACE RESERVED FOR YOUR PROJECT]</h4>
+              <div
+                className="project-cover-wrapper"
+                style={{
+                  backgroundColor: "#f5f2ed",
+                  border: "2px dashed #ccc",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center"
+                }}>
+                <div
+                  style={{ textAlign: "center", color: "#666", fontSize: 14 }}>
+                  <h4 style={{ color: "#333", marginBottom: 10 }}>
+                    [SPACE RESERVED FOR YOUR PROJECT]
+                  </h4>
                   <p>Your next creative project could be featured here</p>
                 </div>
               </div>
               <div className="project-description-wrapper more-padding">
-                <h4 className="center-aligned black">[Space Reserved for Your Project]</h4>
-                <h2 className="smaller black">Ready to create something amazing together?</h2>
+                <h4 className="center-aligned black">
+                  [Space Reserved for Your Project]
+                </h4>
+                <h2 className="smaller black">
+                  Ready to create something amazing together?
+                </h2>
                 <div className="service-tags">Let's chat</div>
               </div>
             </div>
           </div>
         </div>
       </section>
-      <div className="card-size-control" role="group" aria-label="Card size selector">
+      <div
+        className="card-size-control"
+        role="group"
+        aria-label="Card size selector">
         <span>Card size</span>
         <div className="card-size-actions">
           {cardSizeOptions.map((option) => {
@@ -905,8 +1240,7 @@ export function Overlay({ onClose }: { onClose: () => void }) {
                 className={`card-size-btn${isActive ? " active" : ""}`}
                 onClick={() => handleCardSizeSelect(option.value)}
                 aria-pressed={isActive}
-                title={`${option.percent} viewport width`}
-              >
+                title={`${option.percent} viewport width`}>
                 {option.label}
                 <span>{option.percent}</span>
               </button>
@@ -942,9 +1276,13 @@ function unmountOverlay() {
     if (!mountContainer) return
 
     // Try to play exit animation if overlay element is present
-    const overlayEl = mountContainer.querySelector('section.overlay') as HTMLElement | null
+    const overlayEl = mountContainer.querySelector(
+      "section.overlay"
+    ) as HTMLElement | null
     const { shadow } = ensureShadowHost()
-    const btnEl = shadow.getElementById('toggle-frosted-overlay-btn') as HTMLElement | null
+    const btnEl = shadow.getElementById(
+      "toggle-frosted-overlay-btn"
+    ) as HTMLElement | null
 
     if (overlayEl && !isExiting) {
       isExiting = true
@@ -965,8 +1303,8 @@ function unmountOverlay() {
 
       // Ensure starting state matches the fully-open overlay
       overlayEl.style.clipPath = `circle(${maxR}px at ${x}px ${y}px)`
-      overlayEl.style.setProperty('--blur', '8px')
-      overlayEl.style.backgroundColor = 'rgba(20, 18, 13, 0.22)'
+      overlayEl.style.setProperty("--blur", "8px")
+      overlayEl.style.backgroundColor = "rgba(20, 18, 13, 0.22)"
 
       const finish = () => {
         try {
@@ -977,7 +1315,7 @@ function unmountOverlay() {
           mountContainer?.remove()
           mountContainer = null
         } catch (e) {
-          console.warn('Error during final unmount:', e)
+          console.warn("Error during final unmount:", e)
         } finally {
           isExiting = false
         }
@@ -990,16 +1328,21 @@ function unmountOverlay() {
             `circle(${maxR}px at ${x}px ${y}px)`,
             `circle(0px at ${x}px ${y}px)`
           ],
-          '--blur': ['8px', '0px'],
-          backgroundColor: [
-            'rgba(20, 18, 13, 0.22)',
-            'rgba(11, 87, 208, 0.20)'
-          ]
+          "--blur": ["8px", "0px"],
+          backgroundColor: ["rgba(20, 18, 13, 0.22)", "rgba(11, 87, 208, 0.20)"]
         } as any,
-        { duration: 0.6, easing: 'cubic-bezier(0.22, 1, 0.36, 1)', fill: 'forwards' } as any
+        {
+          duration: 0.6,
+          easing: "cubic-bezier(0.22, 1, 0.36, 1)",
+          fill: "forwards"
+        } as any
       )
 
-      if (controls && controls.finished && typeof controls.finished.then === 'function') {
+      if (
+        controls &&
+        controls.finished &&
+        typeof controls.finished.then === "function"
+      ) {
         controls.finished.then(finish).catch(finish)
       } else {
         // Fallback

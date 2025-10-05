@@ -54,7 +54,7 @@ runs: Dict[str, Run] = {}
 # Load .env once at startup
 load_dotenv()
 
-app = FastAPI(title="Overlay Backend API", version="0.0.1")
+app = FastAPI(title="Overlay Backend API", version="0.0.2")
 
 # CORS: during development we allow all origins.
 app.add_middleware(
@@ -197,7 +197,7 @@ async def stream_agent(runId: str, request: Request) -> StreamingResponse:
 
 @app.get("/")
 async def root() -> Dict[str, Any]:
-    return {"ok": True, "service": "overlay-backend", "version": "0.0.1"}
+    return {"ok": True, "service": "overlay-backend", "version": "0.0.2"}
 
 
 # ---------- Analysis endpoint (DOM + screenshots -> GPT suggestions) ----------
@@ -221,6 +221,13 @@ class Suggestion(BaseModel):
 
 class AnalysisResponse(BaseModel):
     suggestions: List[Suggestion]
+    model: str
+    usage_tokens: Optional[int] = None
+
+
+class SuggestResponse(BaseModel):
+    reasoning: str
+    content: str
     model: str
     usage_tokens: Optional[int] = None
 
@@ -388,9 +395,12 @@ async def run_responses_api(req: AnalysisRequest, mode: str) -> Dict[str, Any]:
     settings = get_gpt_settings()
 
     base_instruction = (
-        "Extract and summarize the key information shown in the UI. Focus on facts, values, labels, statuses, deadlines, totals, and important entities. Do not describe layout or visuals. No jargon. Do not mention DOM or HTML tags."
+        "Write a concise description of the page content that begins with 'This page contains'. Focus on factual information visible in the UI: key entities, values, labels, statuses, deadlines, totals, and noteworthy items. Use 1–3 sentences, present tense, neutral tone. Do not describe layout or visuals. Avoid jargon and do not mention DOM, HTML, or screenshots."
         if mode == "summary"
-        else "Identify the main activity on this page and propose the next concrete actions (3–6) to move it forward. Prioritize high-impact steps. If the context is a message/email/chat composer or reply view, include a concise draft reply. Keep suggestions specific and safe; avoid low-value navigation tips. Provide a brief rationale for each action."
+        else (
+            "Identify the main activity on this page and propose the next concrete actions that I, the AI assistant, can take to move it forward. Prioritize high-impact, assistant-executable steps. If the context is a message/email/chat composer or reply view, include a concise draft reply. Keep suggestions specific and safe; avoid low-value navigation tips. Write in paragraphs rather than bullet points."
+            "\n\nSTRICT FORMAT:\nReasoning: 2–4 sentences describing what I will do next (assistant actions only; no meta commentary).\nContent: a short, well-formed paragraph with the drafted reply email/message if applicable; otherwise 'n/a'."
+        )
     )
     # Build text
     req_for_text = AnalysisRequest(
@@ -454,12 +464,53 @@ async def summarize_page(req: AnalysisRequest) -> SummaryResponse:
     return SummaryResponse(summary=text, model=get_gpt_settings()["model"], usage_tokens=usage_tokens)
 
 
-@app.post("/api/suggest", response_model=AnalysisResponse)
-async def suggest_actions(req: AnalysisRequest) -> AnalysisResponse:
+def parse_reasoning_and_content(text: str) -> tuple[str, str]:
+    # Expecting sections labeled "Reasoning:" and "Content:" per the strict format
+    lines = [l.rstrip() for l in text.splitlines()]
+    reasoning: List[str] = []
+    content_lines: List[str] = []
+    mode: Optional[str] = None
+    for raw in lines:
+        line = raw.strip()
+        if not line:
+            # preserve blank lines only for content accumulation
+            if mode == "content":
+                content_lines.append("")
+            continue
+        lower = line.lower()
+        if lower.startswith("reasoning:"):
+            mode = "reasoning"
+            after = line[len("Reasoning:"):].strip()
+            if after:
+                reasoning.append(after.lstrip("-• "))
+            continue
+        if lower.startswith("content:"):
+            mode = "content"
+            after = line[len("Content:"):].strip()
+            if after:
+                content_lines.append(after)
+            continue
+        if mode == "reasoning":
+            reasoning.append(line.lstrip("-• \t"))
+        elif mode == "content":
+            content_lines.append(raw)
+    # Post-process
+    reasoning = [r for r in (s.strip() for s in reasoning) if r]
+    # Join reasoning lines into one paragraph
+    reasoning_paragraph = " ".join(reasoning).strip()
+    # Normalize whitespace
+    reasoning_paragraph = " ".join(reasoning_paragraph.split())
+    content = "\n".join(content_lines).strip()
+    if not content:
+        content = "n/a"
+    return reasoning_paragraph, content
+
+
+@app.post("/api/suggest", response_model=SuggestResponse)
+async def suggest_actions(req: AnalysisRequest) -> SuggestResponse:
     data = await run_responses_api(req, mode="suggest")
     text, usage_tokens = extract_output_text(data)
-    lines = [l.strip(" -•\t") for l in text.splitlines() if l.strip()]
-    suggestions = [Suggestion(description=l, actions=[]) for l in lines[:10]]
-    return AnalysisResponse(suggestions=suggestions, model=get_gpt_settings()["model"], usage_tokens=usage_tokens)
+    reasoning, content = parse_reasoning_and_content(text)
+    return SuggestResponse(reasoning=reasoning, content=content, model=get_gpt_settings()["model"], usage_tokens=usage_tokens)
 
 

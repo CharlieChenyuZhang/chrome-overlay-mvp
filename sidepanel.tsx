@@ -216,6 +216,62 @@ function SidePanel() {
     closeStream()
   }
 
+  const getActiveTab = async (): Promise<chrome.tabs.Tab | undefined> => {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true })
+    return tab
+  }
+
+  const getDomHtml = async (tabId: number): Promise<string> => {
+    const [{ result }] = await chrome.scripting.executeScript({
+      target: { tabId },
+      func: () => document.documentElement.outerHTML
+    })
+    return String(result || "")
+  }
+
+  const captureScreenshot = async (): Promise<{
+    mime: string
+    b64: string
+  }> => {
+    const dataUrl = await chrome.tabs.captureVisibleTab(undefined, {
+      format: "png"
+    })
+    // dataUrl like: data:image/png;base64,AAA...
+    const [prefix, b64] = String(dataUrl).split(",", 2)
+    const mime = prefix.substring(prefix.indexOf(":") + 1, prefix.indexOf(";"))
+    return { mime, b64 }
+  }
+
+  const handleAnalyze = async () => {
+    try {
+      appendLog("[analysis] capturing page…")
+      const tab = await getActiveTab()
+      if (!tab?.id) throw new Error("No active tab")
+      const domHtml = await getDomHtml(tab.id)
+      const shot = await captureScreenshot()
+
+      const body = {
+        page_url: tab.url || null,
+        dom_html: domHtml,
+        screenshots: [
+          {
+            mime_type: shot.mime,
+            data_base64: shot.b64
+          }
+        ],
+        user_prompt: "Analyze this page and suggest safe UI actions."
+      }
+
+      appendLog("[analysis] sending to backend…")
+      const res = await callApi("/api/analysis", body)
+      appendLog(`[analysis] response: ${JSON.stringify(res)}`)
+      console.log("/api/analysis response", res)
+    } catch (e) {
+      appendLog(`[analysis] error: ${String(e)}`)
+      console.error("/api/analysis failed", e)
+    }
+  }
+
   return (
     <div
       style={{
@@ -358,6 +414,18 @@ function SidePanel() {
             Clear
           </button>
           <button
+            onClick={handleAnalyze}
+            style={{
+              background: "#1f6feb",
+              border: "none",
+              borderRadius: 8,
+              padding: "10px 14px",
+              color: "#fff",
+              cursor: "pointer"
+            }}>
+            Analyze Page
+          </button>
+          <button
             onClick={handleSubmitTask}
             disabled={!taskText || status === "running"}
             style={{
@@ -438,7 +506,7 @@ function SidePanel() {
             color: "#6b7280",
             textAlign: "right"
           }}>
-          V0.0.1
+          V0.0.3
         </div>
       </div>
     </div>

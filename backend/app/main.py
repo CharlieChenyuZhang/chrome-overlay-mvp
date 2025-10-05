@@ -3,6 +3,7 @@ import json
 import time
 import uuid
 import os
+from dotenv import load_dotenv
 from typing import Any, AsyncGenerator, Dict, List, Optional
 
 from fastapi import FastAPI, HTTPException, Request
@@ -49,6 +50,9 @@ class Run:
 
 
 runs: Dict[str, Run] = {}
+
+# Load .env once at startup
+load_dotenv()
 
 app = FastAPI(title="Overlay Backend API", version="0.0.1")
 
@@ -246,6 +250,28 @@ async def call_gpt_api(payload: Dict[str, Any]) -> Dict[str, Any]:
         return resp.json()
 
 
+def build_input_text(req: AnalysisRequest) -> str:
+    system_prompt = (
+        "You are a UI assistant. Given raw DOM, analyze the page state and "
+        "propose specific, safe UI actions. Return a concise bullet list of "
+        "actions with rationale."
+    )
+
+    max_dom_chars = 120000
+    dom_excerpt = req.dom_html[:max_dom_chars]
+    user_prompt = req.user_prompt or "Please analyze this page and suggest next UI actions."
+
+    parts: List[str] = [
+        f"[SYSTEM]\n{system_prompt}",
+        f"[URL]\n{req.page_url or 'unknown'}",
+        f"[INSTRUCTION]\n{user_prompt}",
+        "[DOM_TRUNCATED]",
+        dom_excerpt,
+    ]
+    # Note: screenshots omitted in text mode to maximize compatibility
+    return "\n\n".join(parts)
+
+
 def build_input_blocks(req: AnalysisRequest) -> List[Dict[str, Any]]:
     system_prompt = (
         "You are a UI assistant. Given raw DOM and one or more screenshots, "
@@ -254,26 +280,24 @@ def build_input_blocks(req: AnalysisRequest) -> List[Dict[str, Any]]:
     )
 
     blocks: List[Dict[str, Any]] = [
-        {"type": "text", "text": f"[SYSTEM]\n{system_prompt}"}
+        {"type": "text", "text": f"[SYSTEM]\n{system_prompt}"},
+        {"type": "text", "text": f"[URL]\n{req.page_url or 'unknown'}"},
+        {"type": "text", "text": (req.user_prompt or "Please analyze this page and suggest next UI actions.")},
     ]
-
-    if req.user_prompt:
-        blocks.append({"type": "text", "text": req.user_prompt})
-    else:
-        blocks.append({"type": "text", "text": "Please analyze this page and suggest next UI actions."})
 
     # Attach DOM content (truncate to keep payload reasonable)
     max_dom_chars = 120000
     dom_excerpt = req.dom_html[:max_dom_chars]
-    blocks.append({"type": "text", "text": f"DOM HTML (truncated):\n{dom_excerpt}"})
+    blocks.append({"type": "text", "text": f"[DOM_TRUNCATED]\n{dom_excerpt}"})
 
-    # Attach screenshots as image blocks if provided (freeform multimodal inputs)
+    # Attach screenshots as image blocks if provided (multimodal)
     for s in req.screenshots:
-        blocks.append({"type": "text", "text": "Screenshot:"})
+        ext = s.mime_type.split("/")[-1] if "/" in s.mime_type else "png"
+        blocks.append({"type": "text", "text": "[SCREENSHOT]"})
         blocks.append({
             "type": "input_image",
             "image": {
-                "format": s.mime_type.split("/")[-1],
+                "format": ext,
                 "b64_data": s.data_base64,
             },
         })
@@ -284,17 +308,34 @@ def build_input_blocks(req: AnalysisRequest) -> List[Dict[str, Any]]:
 @app.post("/api/analysis", response_model=AnalysisResponse)
 async def analyze_page(req: AnalysisRequest) -> AnalysisResponse:
     settings = get_gpt_settings()
-    input_blocks = build_input_blocks(req)
-
-    payload = {
-        "model": settings["model"],
-        "input": input_blocks,
-        "reasoning": {"effort": "minimal"},
-        "text": {"verbosity": "low"},
-        "max_output_tokens": 800,
-    }
-
-    data = await call_gpt_api(payload)
+    # Prefer multimodal when screenshots provided; fallback to text-only on 400
+    use_blocks = len(req.screenshots) > 0
+    data: Dict[str, Any]
+    try:
+        if use_blocks:
+            payload_blocks = {
+                "model": settings["model"],
+                "input": build_input_blocks(req),
+                "reasoning": {"effort": "minimal"},
+                "text": {"verbosity": "low"},
+                "max_output_tokens": 800,
+            }
+            data = await call_gpt_api(payload_blocks)
+        else:
+            raise HTTPException(status_code=599, detail="skip-to-text")
+    except HTTPException as he:
+        if he.status_code in (400, 415, 422, 599):
+            input_text = build_input_text(req)
+            payload_text = {
+                "model": settings["model"],
+                "input": input_text,
+                "reasoning": {"effort": "minimal"},
+                "text": {"verbosity": "low"},
+                "max_output_tokens": 800,
+            }
+            data = await call_gpt_api(payload_text)
+        else:
+            raise
 
     # Extract text from Responses API
     text = ""

@@ -388,9 +388,9 @@ async def run_responses_api(req: AnalysisRequest, mode: str) -> Dict[str, Any]:
     settings = get_gpt_settings()
 
     base_instruction = (
-        "Summarize the page content clearly and concisely. Avoid speculation."
+        "Extract and summarize the key information shown in the UI. Focus on facts, values, labels, statuses, deadlines, totals, and important entities. Do not describe layout or visuals. No jargon. Do not mention DOM or HTML tags."
         if mode == "summary"
-        else "Analyze the page and propose specific, safe UI actions with brief rationale."
+        else "Identify the main activity on this page and propose the next concrete actions (3–6) to move it forward. Prioritize high-impact steps. If the context is a message/email/chat composer or reply view, include a concise draft reply. Keep suggestions specific and safe; avoid low-value navigation tips. Provide a brief rationale for each action."
     )
     # Build text
     req_for_text = AnalysisRequest(

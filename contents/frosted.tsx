@@ -3,6 +3,8 @@ import type { PlasmoCSConfig } from "plasmo"
 import React, { useEffect } from "react"
 import { createRoot, type Root } from "react-dom/client"
 
+import { LiveWaveform } from "../components/ui/live-waveform"
+
 export const config: PlasmoCSConfig = {
   matches: ["<all_urls>"],
   run_at: "document_idle",
@@ -56,8 +58,6 @@ try {
 // --- Shadow host setup ---
 const HOST_ID = "__frosted_takeover_overlay_host__"
 const BTN_ID = "__frosted_overlay_toggle_btn__"
-const VOLUME_BAR_COUNT = 48
-
 function ensureShadowHost(): { host: HTMLDivElement; shadow: ShadowRoot } {
   let host = document.getElementById(HOST_ID) as HTMLDivElement | null
   if (!host) {
@@ -214,27 +214,34 @@ const styles = `
 .project-wrapped.record-card:hover { box-shadow: #14120d 0px 6px 18px 0px; transform: translateY(-2px); }
 .project-wrapped.record-card:focus-visible { outline: 2px solid #0b57d0; outline-offset: 4px; box-shadow: #0b57d0 0px 0px 0px 2px inset; }
 .project-cover-wrapper.recorder { background: linear-gradient(135deg, rgba(245, 242, 237, 0.95), rgba(193, 206, 245, 0.65)); min-height: clamp(180px, 28vh, 320px); }
-.recording-panel { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: clamp(8px, 1.2vw, 18px); text-align: center; color: #121111; padding: clamp(20px, 3vw, 40px); width: 100%; }
-.recording-status { display: flex; align-items: center; gap: clamp(8px, 1vw, 16px); font-size: clamp(12px, 1.4vw, 22px); font-weight: 500; }
-.record-status-dot { width: clamp(10px, 1.2vw, 16px); height: clamp(10px, 1.2vw, 16px); border-radius: 50%; background: #d70015; box-shadow: 0 0 8px rgba(215, 0, 21, 0.45); opacity: 0.85; }
-.record-status-dot.active { animation: record-pulse 1.4s ease-in-out infinite; }
-.recording-subtext { font-size: clamp(12px, 1.15vw, 18px); color: #3d3a30; max-width: 90%; margin: 0 auto; }
+.voice-panel { display: flex; flex-direction: column; gap: clamp(12px, 1.6vw, 22px); color: #121111; padding: clamp(22px, 3vw, 42px); width: 100%; }
+.voice-status-row { display: flex; align-items: center; justify-content: space-between; gap: clamp(8px, 1.2vw, 16px); }
+.voice-status { display: flex; align-items: center; gap: clamp(8px, 1vw, 16px); font-size: clamp(12px, 1.4vw, 22px); font-weight: 500; }
+.voice-status-dot { width: clamp(12px, 1.4vw, 18px); height: clamp(12px, 1.4vw, 18px); border-radius: 50%; background: #d70015; box-shadow: 0 0 8px rgba(215, 0, 21, 0.45); opacity: 0.88; transition: background 0.3s ease, box-shadow 0.3s ease; }
+.voice-status-dot.recording { animation: record-pulse 1.4s ease-in-out infinite; }
+.voice-status-dot.processing { background: #0b57d0; box-shadow: 0 0 10px rgba(11, 87, 208, 0.45); animation: pulse-blue 1.2s ease-in-out infinite; }
+.voice-status-tip { font-size: clamp(11px, 1.05vw, 16px); color: rgba(18, 17, 17, 0.65); }
+.voice-waveform-shell { position: relative; width: 100%; height: clamp(150px, 30vh, 320px); border-radius: 18px; border: 1px solid rgba(11, 87, 208, 0.25); background: linear-gradient(180deg, rgba(255, 255, 255, 0.78) 0%, rgba(193, 206, 245, 0.45) 100%); box-shadow: inset 0 1px 8px rgba(11, 87, 208, 0.18), 0 10px 22px rgba(11, 87, 208, 0.16); overflow: hidden; transition: opacity 0.25s ease, transform 0.25s ease; }
+.voice-waveform-shell.active { transform: translateY(-2px); }
+.voice-waveform-shell.idle { opacity: 0.55; }
+.voice-waveform-shell.processing { background: linear-gradient(180deg, rgba(193, 206, 245, 0.65) 0%, rgba(254, 255, 217, 0.6) 100%); }
+.voice-waveform { width: 100%; height: 100%; }
+.voice-waveform canvas { border-radius: 18px; }
+.voice-waveform-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: clamp(11px, 1.1vw, 18px); font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(11, 87, 208, 0.82); background: linear-gradient(180deg, rgba(254, 255, 217, 0.45), rgba(254, 255, 217, 0.1)); pointer-events: none; }
+.voice-hint { font-size: clamp(12px, 1.15vw, 18px); color: #3d3a30; max-width: 90%; margin: 0 auto; text-align: center; }
 .project-description-wrapper.record-description { display: flex; flex-direction: column; align-items: center; gap: clamp(12px, 1.4vw, 24px); }
-.project-description-wrapper.record-description audio { width: 100%; outline: none; }
-.record-placeholder { width: 100%; text-align: center; color: #6f6a60; font-size: clamp(11px, 1.1vw, 17px); border: 1px dashed rgba(20, 18, 13, 0.2); padding: clamp(12px, 1.6vw, 20px); border-radius: 8px; background: rgba(254, 255, 217, 0.4); }
-.record-error { margin-top: 4px; color: #d70015; font-size: clamp(11px, 1.05vw, 16px); text-align: center; }
-.transcribing-indicator { display: flex; align-items: center; gap: clamp(8px, 1vw, 16px); color: #3d3a30; font-size: clamp(12px, 1.2vw, 18px); }
+.project-description-wrapper.record-description audio { width: 100%; outline: none; border-radius: 10px; background: rgba(255, 255, 255, 0.65); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08); }
+.voice-placeholder { width: 100%; text-align: center; color: #6f6a60; font-size: clamp(11px, 1.1vw, 17px); border: 1px dashed rgba(20, 18, 13, 0.25); padding: clamp(12px, 1.6vw, 20px); border-radius: 12px; background: rgba(254, 255, 217, 0.4); }
+.voice-error { margin-top: 4px; color: #d70015; font-size: clamp(11px, 1.05vw, 16px); text-align: center; }
+.voice-processing { display: flex; align-items: center; gap: clamp(8px, 1vw, 16px); color: #3d3a30; font-size: clamp(12px, 1.2vw, 18px); }
 .spinner { width: clamp(14px, 1.6vw, 20px); height: clamp(14px, 1.6vw, 20px); border: 3px solid rgba(11, 87, 208, 0.2); border-top-color: #0b57d0; border-radius: 50%; animation: spinner-rotate 0.9s linear infinite; }
 /* Apple-style subtle spinner for card overlays */
 .spinner-apple { position: relative; width: 28px; height: 28px; display: inline-block; }
 .spinner-apple::before { content: ""; position: absolute; inset: 0; border-radius: 50%; box-sizing: border-box; background: conic-gradient(from 0deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.9) 20%, rgba(255,255,255,0) 100%); -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px)); mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 3px)); filter: drop-shadow(0 0 6px rgba(255,255,255,0.45)); animation: spinner-rotate 0.8s linear infinite; }
 .spinner-apple::after { content: ""; position: absolute; inset: 6px; border-radius: 50%; background: rgba(255,255,255,0.06); }
 .transcription-box { width: 100%; text-align: left; color: #121111; font-size: clamp(12px, 1.2vw, 18px); line-height: 1.6; background: rgba(254, 255, 217, 0.7); border-radius: 10px; padding: clamp(14px, 1.8vw, 24px); border: 1px solid rgba(20, 18, 13, 0.12); box-shadow: inset 0 1px 3px rgba(20, 18, 13, 0.12); white-space: pre-wrap; word-break: break-word; }
-.volume-visualizer { width: 100%; height: clamp(54px, 6.5vw, 110px); display: flex; align-items: center; gap: clamp(3px, 0.5vw, 6px); padding: clamp(10px, 1.2vw, 14px) clamp(8px, 1vw, 12px); border-radius: 14px; background: linear-gradient(180deg, rgba(255, 255, 255, 0.75) 0%, rgba(254, 255, 217, 0.55) 100%); border: 1px solid rgba(11, 87, 208, 0.2); box-shadow: inset 0 1px 6px rgba(11, 87, 208, 0.15), 0 8px 18px rgba(11, 87, 208, 0.12); transition: opacity 0.25s ease, transform 0.25s ease; }
-.volume-bar { flex: 1; height: 100%; border-radius: 999px; background: linear-gradient(180deg, rgba(11, 87, 208, 0.95) 0%, rgba(11, 87, 208, 0.45) 100%); box-shadow: 0 4px 10px rgba(11, 87, 208, 0.18); transform-origin: center; transition: transform 0.12s ease-out, opacity 0.25s ease; }
-.volume-bar.muted { opacity: 0.2; }
-.volume-visualizer.idle { opacity: 0.45; transform: translateY(4px); }
 @keyframes record-pulse { 0% { transform: scale(1); opacity: 0.8; } 50% { transform: scale(1.35); opacity: 0.4; } 100% { transform: scale(1); opacity: 0.8; } }
+@keyframes pulse-blue { 0% { transform: scale(1); opacity: 0.85; } 50% { transform: scale(1.25); opacity: 0.45; } 100% { transform: scale(1); opacity: 0.85; } }
 @keyframes spinner-rotate { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 .card-size-control { position: fixed; right: clamp(16px, 3vw, 36px); bottom: clamp(16px, 3vw, 36px); display: flex; align-items: center; gap: clamp(10px, 1.2vw, 18px); padding: clamp(10px, 1.4vw, 18px); background: rgba(20, 18, 13, 0.7); border-radius: 18px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); z-index: 2147483647; color: #feffd9; }
 .card-size-control span { font-size: clamp(12px, 1.2vw, 16px); opacity: 0.8; }
@@ -257,23 +264,15 @@ export function Overlay({ onClose }: { onClose: () => void }) {
     null
   )
   const [cardWidthRatio, setCardWidthRatio] = React.useState(0.5)
-  const [volumeLevels, setVolumeLevels] = React.useState<number[]>(() =>
-    Array.from({ length: VOLUME_BAR_COUNT }, () => 0)
-  )
-  const previousLevelsRef = React.useRef<number[]>(
-    Array.from({ length: VOLUME_BAR_COUNT }, () => 0)
-  )
   const mediaRecorderRef = React.useRef<MediaRecorder | null>(null)
   const audioChunksRef = React.useRef<Blob[]>([])
   const audioUrlRef = React.useRef<string | null>(null)
   const audioBlobRef = React.useRef<Blob | null>(null)
   const isMountedRef = React.useRef(true)
   const transcribeJobRef = React.useRef(0)
-  const audioContextRef = React.useRef<AudioContext | null>(null)
-  const analyserRef = React.useRef<AnalyserNode | null>(null)
-  const dataArrayRef = React.useRef<Uint8Array | null>(null)
-  const volumeRafRef = React.useRef<number | null>(null)
-  const streamSourceRef = React.useRef<MediaStreamAudioSourceNode | null>(null)
+  const waveformStreamRef = React.useRef<MediaStream | null>(null)
+  const isRecordingRef = React.useRef(false)
+  const isStoppingRef = React.useRef(false)
   const openaiApiKey = process.env.PLASMO_PUBLIC_OPENAI_KEY as
     | string
     | undefined
@@ -307,6 +306,13 @@ export function Overlay({ onClose }: { onClose: () => void }) {
       })
     } catch {}
   }, [])
+
+  React.useEffect(() => {
+    isRecordingRef.current = isRecording
+    if (!isRecording) {
+      isStoppingRef.current = false
+    }
+  }, [isRecording])
 
   const callApi = React.useCallback(
     async (path: string, body: unknown) => {
@@ -410,111 +416,6 @@ export function Overlay({ onClose }: { onClose: () => void }) {
     }
   }, [callApi, getDomHtml])
 
-  const stopVolumeMeter = React.useCallback(() => {
-    if (volumeRafRef.current) {
-      cancelAnimationFrame(volumeRafRef.current)
-      volumeRafRef.current = null
-    }
-    try {
-      streamSourceRef.current?.disconnect()
-      analyserRef.current?.disconnect()
-    } catch {}
-    streamSourceRef.current = null
-    analyserRef.current = null
-    if (audioContextRef.current) {
-      // Closing an already closed context throws
-      const ctx = audioContextRef.current
-      if (ctx.state !== "closed") {
-        ctx.close().catch(() => undefined)
-      }
-    }
-    audioContextRef.current = null
-    dataArrayRef.current = null
-    previousLevelsRef.current = Array.from(
-      { length: VOLUME_BAR_COUNT },
-      () => 0
-    )
-    setVolumeLevels(Array.from({ length: VOLUME_BAR_COUNT }, () => 0))
-  }, [])
-
-  const startVolumeMeter = React.useCallback(
-    async (stream: MediaStream) => {
-      try {
-        stopVolumeMeter()
-        const AudioCtx =
-          window.AudioContext || (window as any).webkitAudioContext
-        if (!AudioCtx) {
-          return
-        }
-
-        const audioCtx = new AudioCtx()
-        audioContextRef.current = audioCtx
-        if (audioCtx.state === "suspended") {
-          try {
-            await audioCtx.resume()
-          } catch (resumeError) {
-            console.warn("Audio context resume failed", resumeError)
-          }
-        }
-        const source = audioCtx.createMediaStreamSource(stream)
-        streamSourceRef.current = source
-        const analyser = audioCtx.createAnalyser()
-        analyser.fftSize = 2048
-        analyser.smoothingTimeConstant = 0.65
-        analyserRef.current = analyser
-        const bufferLength = analyser.fftSize
-        const dataArray: Uint8Array = new (Uint8Array as unknown as {
-          new (length: number): Uint8Array
-        })(bufferLength as number)
-        dataArrayRef.current = dataArray
-
-        source.connect(analyser)
-
-        const barCount = VOLUME_BAR_COUNT
-        const smoothFactor = 0.35
-
-        const tick = () => {
-          if (!analyserRef.current || !dataArrayRef.current) {
-            return
-          }
-          analyserRef.current.getByteTimeDomainData(dataArrayRef.current as any)
-          const segmentSize = Math.max(
-            1,
-            Math.floor(dataArrayRef.current.length / barCount)
-          )
-          const nextLevels: number[] = []
-          for (let i = 0; i < barCount; i++) {
-            const start = i * segmentSize
-            let sumSquares = 0
-            for (
-              let j = 0;
-              j < segmentSize && start + j < dataArrayRef.current.length;
-              j++
-            ) {
-              const sample = dataArrayRef.current[start + j] - 128
-              sumSquares += sample * sample
-            }
-            const rms = Math.sqrt(sumSquares / segmentSize) / 128 || 0
-            nextLevels.push(rms)
-          }
-          const smoothedLevels = nextLevels.map((level, idx) => {
-            const previous = previousLevelsRef.current[idx] ?? 0
-            const blended = previous * (1 - smoothFactor) + level * smoothFactor
-            return Math.min(1, Math.max(0, blended))
-          })
-          previousLevelsRef.current = smoothedLevels
-          setVolumeLevels(smoothedLevels)
-          volumeRafRef.current = requestAnimationFrame(tick)
-        }
-
-        volumeRafRef.current = requestAnimationFrame(tick)
-      } catch (error) {
-        console.warn("Unable to initialise volume meter", error)
-      }
-    },
-    [stopVolumeMeter]
-  )
-
   const transcribeAudio = React.useCallback(
     async (blob: Blob, jobId: number) => {
       if (transcribeJobRef.current !== jobId) {
@@ -587,20 +488,144 @@ export function Overlay({ onClose }: { onClose: () => void }) {
     }
   }, [])
 
-  const stopRecording = React.useCallback(() => {
-    const recorder = mediaRecorderRef.current
-    if (recorder && recorder.state !== "inactive") {
-      recorder.stop()
-    }
+  const handleWaveformError = React.useCallback((error: Error) => {
+    console.warn("Microphone waveform error", error)
+    setRecordError(
+      error?.message || "Unable to access the microphone. Please check permissions."
+    )
+    setIsRecording(false)
   }, [])
 
-  const startRecording = React.useCallback(async () => {
+  const handleWaveformErrorEvent = React.useCallback(
+    (value: Error | React.SyntheticEvent<HTMLDivElement>) => {
+      if (value instanceof Error) {
+        handleWaveformError(value)
+      }
+    },
+    [handleWaveformError]
+  )
+
+  const handleWaveformStreamReady = React.useCallback(
+    (stream: MediaStream) => {
+      waveformStreamRef.current = stream
+      if (!isRecordingRef.current) {
+        return
+      }
+
+      // Avoid creating multiple recorders for the same stream
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+        return
+      }
+
+      try {
+        const recorder = new MediaRecorder(stream)
+        mediaRecorderRef.current = recorder
+        audioChunksRef.current = []
+
+        recorder.ondataavailable = (event) => {
+          if (event.data && event.data.size > 0) {
+            audioChunksRef.current.push(event.data)
+          }
+        }
+
+        recorder.onerror = (event) => {
+          console.warn("Recorder error", event)
+          mediaRecorderRef.current = null
+          audioChunksRef.current = []
+          setRecordError(
+            "Something went wrong while recording, please try again."
+          )
+          setIsRecording(false)
+        }
+
+        recorder.onstop = () => {
+          const chunks = audioChunksRef.current
+          mediaRecorderRef.current = null
+          audioChunksRef.current = []
+
+          const shouldUpdate = chunks.length > 0
+          const mimeType = recorder.mimeType || "audio/webm"
+          const blob = shouldUpdate ? new Blob(chunks, { type: mimeType }) : null
+          const url = blob ? URL.createObjectURL(blob) : null
+
+          if (!isMountedRef.current) {
+            if (url) {
+              URL.revokeObjectURL(url)
+            }
+            return
+          }
+
+          if (url) {
+            updateAudioUrl(url)
+            audioBlobRef.current = blob
+            const jobId = transcribeJobRef.current
+            if (blob) {
+              void transcribeAudio(blob, jobId)
+            }
+          } else {
+            updateAudioUrl(null)
+            audioBlobRef.current = null
+          }
+
+          if (!isStoppingRef.current) {
+            setIsRecording(false)
+          }
+        }
+
+        recorder.start()
+      } catch (error) {
+        console.warn("Failed to start media recorder", error)
+        mediaRecorderRef.current = null
+        audioChunksRef.current = []
+        setRecordError(
+          error instanceof Error
+            ? error.message
+            : "Unable to start recording. Please try again."
+        )
+        setIsRecording(false)
+      }
+    },
+    [transcribeAudio, updateAudioUrl]
+  )
+
+  const handleWaveformStreamEnd = React.useCallback(() => {
+    waveformStreamRef.current = null
+
+    const recorder = mediaRecorderRef.current
+    if (recorder && recorder.state === "recording") {
+      recorder.stop()
+    }
+
+    if (!isStoppingRef.current && isRecordingRef.current) {
+      setRecordError("Microphone input ended unexpectedly.")
+    }
+
+    setIsRecording(false)
+    isStoppingRef.current = false
+  }, [])
+
+  const stopRecording = React.useCallback(() => {
+    isStoppingRef.current = true
+    const recorder = mediaRecorderRef.current
+    if (recorder && recorder.state === "recording") {
+      try {
+        recorder.stop()
+      } catch (error) {
+        console.warn("Error stopping recorder", error)
+      }
+    }
+    setIsRecording(false)
+  }, [])
+
+  const startRecording = React.useCallback(() => {
     setRecordError(null)
     setTranscription(null)
     setTranscribeError(null)
     setIsTranscribing(false)
     audioBlobRef.current = null
     transcribeJobRef.current += 1
+    updateAudioUrl(null)
+    audioChunksRef.current = []
 
     if (typeof MediaRecorder === "undefined") {
       setRecordError("This browser does not support audio recording.")
@@ -615,91 +640,16 @@ export function Overlay({ onClose }: { onClose: () => void }) {
       return
     }
 
-    try {
-      updateAudioUrl(null)
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const recorder = new MediaRecorder(stream)
-      mediaRecorderRef.current = recorder
-      audioChunksRef.current = []
+    isStoppingRef.current = false
+    setIsRecording(true)
+  }, [updateAudioUrl])
 
-      await startVolumeMeter(stream)
-
-      recorder.ondataavailable = (event) => {
-        if (event.data && event.data.size > 0) {
-          audioChunksRef.current.push(event.data)
-        }
-      }
-
-      recorder.onerror = (event) => {
-        console.warn("Recorder error", event)
-        stopVolumeMeter()
-        stream.getTracks().forEach((track) => track.stop())
-        mediaRecorderRef.current = null
-        audioChunksRef.current = []
-        if (!isMountedRef.current) {
-          return
-        }
-        setRecordError(
-          "Something went wrong while recording, please try again."
-        )
-        setIsRecording(false)
-      }
-
-      recorder.onstop = () => {
-        stopVolumeMeter()
-        stream.getTracks().forEach((track) => track.stop())
-        const chunks = audioChunksRef.current
-        mediaRecorderRef.current = null
-        audioChunksRef.current = []
-
-        const shouldUpdate = chunks.length > 0
-        const mimeType = recorder.mimeType || "audio/webm"
-        const blob = shouldUpdate ? new Blob(chunks, { type: mimeType }) : null
-        const url = blob ? URL.createObjectURL(blob) : null
-
-        if (!isMountedRef.current) {
-          if (url) {
-            URL.revokeObjectURL(url)
-          }
-          return
-        }
-
-        if (url) {
-          updateAudioUrl(url)
-          audioBlobRef.current = blob
-          const jobId = transcribeJobRef.current
-          if (blob) {
-            void transcribeAudio(blob, jobId)
-          }
-        } else {
-          updateAudioUrl(null)
-          audioBlobRef.current = null
-        }
-        setIsRecording(false)
-      }
-
-      recorder.start()
-      setIsRecording(true)
-    } catch (error) {
-      console.warn("Failed to start recording", error)
-      updateAudioUrl(null)
-      if (!isMountedRef.current) {
-        return
-      }
-      stopVolumeMeter()
-      setRecordError(
-        "Unable to start recording. Please check microphone permissions."
-      )
-      setIsRecording(false)
-    }
-  }, [startVolumeMeter, stopVolumeMeter, transcribeAudio, updateAudioUrl])
-
-  const handleRecordCardAction = React.useCallback(async () => {
+  const handleRecordCardAction = React.useCallback(() => {
     if (isRecording) {
       stopRecording()
       return
     }
-    await startRecording()
+    startRecording()
   }, [isRecording, startRecording, stopRecording])
 
   const handleRecordCardClick = React.useCallback(
@@ -729,6 +679,7 @@ export function Overlay({ onClose }: { onClose: () => void }) {
     isMountedRef.current = true
     return () => {
       isMountedRef.current = false
+      isStoppingRef.current = true
       const recorder = mediaRecorderRef.current
       if (recorder && recorder.state !== "inactive") {
         recorder.stop()
@@ -738,9 +689,67 @@ export function Overlay({ onClose }: { onClose: () => void }) {
         URL.revokeObjectURL(audioUrlRef.current)
         audioUrlRef.current = null
       }
-      stopVolumeMeter()
+      if (waveformStreamRef.current) {
+        waveformStreamRef.current.getTracks().forEach((track) => track.stop())
+        waveformStreamRef.current = null
+      }
     }
-  }, [stopVolumeMeter])
+  }, [])
+
+  const recordingStatusText = isRecording
+    ? "Recording… tap to stop"
+    : isTranscribing
+      ? "Processing audio… please wait"
+      : audioUrl
+        ? "Recording saved—tap to capture a new note"
+        : "Tap to start recording"
+
+  const recordingHintText = isRecording
+    ? "Your microphone is live. Speak naturally and tap when you’re ready to finish."
+    : isTranscribing
+      ? "We’re sending the audio to OpenAI for transcription. This usually takes a moment."
+      : audioUrl
+        ? "Tap anywhere on this card to capture another voice note or play back the last one below."
+        : "The first tap will request microphone access and begin recording immediately."
+
+  const descriptionSubtitle = audioUrl
+    ? isTranscribing
+      ? "Recording saved—transcribing now."
+      : transcription
+        ? "Transcript below. Tap the card again to record a fresh note."
+        : "Recording finished—use the player to listen back."
+    : "Tap the card to begin recording. Playback and transcription will appear here."
+
+  const waveformOverlayLabel = isRecording
+    ? "Listening…"
+    : isTranscribing
+      ? "Processing…"
+      : audioUrl
+        ? "Tap to capture a new note"
+        : "Tap to record"
+
+  const statusActionText = isRecording
+    ? "Tap to stop"
+    : isTranscribing
+      ? "Transcribing…"
+      : "Tap to record"
+
+  const waveformClassName = [
+    "voice-waveform-shell",
+    isRecording ? "active" : "",
+    isTranscribing ? "processing" : "",
+    !isRecording && !isTranscribing ? "idle" : ""
+  ]
+    .filter(Boolean)
+    .join(" ")
+
+  const statusDotClass = [
+    "voice-status-dot",
+    isRecording ? "recording" : "",
+    !isRecording && isTranscribing ? "processing" : ""
+  ]
+    .filter(Boolean)
+    .join(" ")
 
   useEffect(() => {
     // Overlay reveal from the blue button (freeze blur effect)
@@ -856,68 +865,50 @@ export function Overlay({ onClose }: { onClose: () => void }) {
               onKeyDown={handleRecordCardKeyDown}
               aria-pressed={isRecording}>
               <div className="project-cover-wrapper recorder">
-                <div className="recording-panel">
-                  <div className="recording-status">
-                    <span
-                      className={`record-status-dot${isRecording ? " active" : ""}`}
-                      aria-hidden="true"
+                <div className="voice-panel">
+                  <div className="voice-status-row">
+                    <div className="voice-status">
+                      <span className={statusDotClass} aria-hidden="true" />
+                      <span>{recordingStatusText}</span>
+                    </div>
+                    <span className="voice-status-tip">{statusActionText}</span>
+                  </div>
+                  <div className={waveformClassName}>
+                    <LiveWaveform
+                      active={isRecording}
+                      processing={isTranscribing}
+                      mode="scrolling"
+                      height="100%"
+                      barWidth={4}
+                      barGap={2}
+                      barRadius={12}
+                      barColor="rgba(11, 87, 208, 0.9)"
+                      fadeEdges
+                      historySize={160}
+                      onError={handleWaveformErrorEvent}
+                      onStreamReady={handleWaveformStreamReady}
+                      onStreamEnd={handleWaveformStreamEnd}
+                      className="voice-waveform"
                     />
-                    <span>
-                      {isRecording
-                        ? "Recording… click to stop"
-                        : isTranscribing
-                          ? "Processing audio… please wait"
-                          : audioUrl
-                            ? "Recording saved, click to record again"
-                            : "Click to start recording"}
-                    </span>
+                    {!isRecording && !isTranscribing ? (
+                      <div className="voice-waveform-overlay">
+                        <span>{waveformOverlayLabel}</span>
+                      </div>
+                    ) : null}
                   </div>
-                  <div
-                    className={`volume-visualizer${!isRecording ? " idle" : ""}`}
-                    style={{ ["--volume-bars" as any]: volumeLevels.length }}
-                    aria-hidden="true">
-                    {volumeLevels.map((level, index) => {
-                      const adjusted = Math.max(0.1, Math.pow(level, 0.8))
-                      return (
-                        <span
-                          key={index}
-                          className={`volume-bar${level < 0.05 ? " muted" : ""}`}
-                          style={{
-                            transform: `scaleY(${Math.min(1, adjusted)})`
-                          }}
-                        />
-                      )
-                    })}
-                  </div>
-                  <p className="recording-subtext">
-                    {isRecording
-                      ? "Audio is being captured—click again when you're done."
-                      : isTranscribing
-                        ? "Uploading and sending to OpenAI for transcription. Please keep this window open."
-                        : audioUrl
-                          ? "Recording saved—you can play it back or capture a new one."
-                          : "The first click will request microphone access and start recording immediately."}
-                  </p>
+                  <p className="voice-hint">{recordingHintText}</p>
                 </div>
               </div>
               <div className="project-description-wrapper record-description">
-                <h4 className="center-aligned black">Voice Notes Card</h4>
-                <h2 className="smaller black">
-                  {audioUrl
-                    ? isTranscribing
-                      ? "Recording saved—transcribing now."
-                      : transcription
-                        ? "Transcription below. Record again to update it."
-                        : "Recording finished—use the player to listen back."
-                    : "Click the card to start recording; playback and transcription will appear here."}
-                </h2>
+                <h4 className="center-aligned black">Voice Notes</h4>
+                <h2 className="smaller black">{descriptionSubtitle}</h2>
                 {recordError ? (
-                  <div className="record-error" role="alert">
+                  <div className="voice-error" role="alert">
                     {recordError}
                   </div>
                 ) : null}
                 {transcribeError ? (
-                  <div className="record-error" role="alert">
+                  <div className="voice-error" role="alert">
                     {transcribeError}
                   </div>
                 ) : null}
@@ -929,17 +920,20 @@ export function Overlay({ onClose }: { onClose: () => void }) {
                     preload="metadata"
                   />
                 ) : (
-                  <div className="record-placeholder">
-                    Once you finish recording, the audio will appear here.
+                  <div className="voice-placeholder">
+                    Your recording will appear here once you tap to finish.
                   </div>
                 )}
                 {isTranscribing ? (
-                  <div className="transcribing-indicator">
+                  <div className="voice-processing">
                     <span className="spinner" aria-hidden="true" />
                     <span>Transcribing audio…</span>
                   </div>
-                ) : transcription ? (
-                  <div className="transcription-box">{transcription}</div>
+                ) : null}
+                {transcription ? (
+                  <div className="transcription-box" role="status">
+                    {transcription}
+                  </div>
                 ) : null}
               </div>
             </div>
